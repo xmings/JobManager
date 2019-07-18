@@ -4,8 +4,6 @@
 # @Author: wangms
 # @Date  : 2019/7/15
 # @Brief: 简述报表功能
-from task import Task
-from job import Job
 
 # t = Task(1, 1, "test", "..")
 # print(t.status)

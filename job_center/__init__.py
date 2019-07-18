@@ -23,6 +23,7 @@ WAITING = 0
 RUNNING = 1
 SUCCESS = 2
 FAILED = 3
+COMPLETED = 4
 
 
 ALL_SUCCESS = 1
@@ -34,3 +35,7 @@ ALL_DONE = 5
 def submit_job(job_id):
     _job_queue.put(job_id)
 
+from job_center.job_manager import job_start
+from job_center.task_manager import task_start
+
+__all__ = ("submit_job", "job_start", "task_start")

@@ -8,8 +8,8 @@ import time
 import pickle
 from redis import Redis
 from multiprocessing import Process, Lock
-from job import Job
-from __init__ import _job_queue, _task_queue, _state_queue, logger
+from job_center.job import Job
+from job_center import _job_queue, _task_queue, _state_queue, COMPLETED, logger
 
 lock = Lock()
 
@@ -36,12 +36,14 @@ class JobManager(object):
             if job_bin:
                 job = pickle.loads(job_bin)
                 logger.info("listen_sate: {}".format(state))
-                next_tasks = job.next_task(state.task_id, state._status)
+                next_tasks = job.next_task(state.task_id, state._status, state.exec_result)
                 self.conn.hset("job_manager.jobs", job.job_id, pickle.dumps(job))
                 # logger.info("listen_sate: {}".format(next_tasks))
                 if not next_tasks:
-                    self.conn.hdel("job_manager.jobs", job.job_id)
-                    logger.info("this job has finished: {}".format(job))
+                    # self.conn.hdel("job_manager.jobs", job.job_id)
+                    job._status = COMPLETED
+                    self.conn.hset("job_manager.jobs", job.job_id, pickle.dumps(job))
+                    logger.info("this job_center has finished: {}".format(job))
                 else:
                     for k, v in next_tasks.items():
                         task_queue.put(v)

@@ -4,8 +4,8 @@
 # @Author: wangms
 # @Date  : 2019/7/15
 # @Brief: 简述报表功能
-from __init__ import WAITING, SUCCESS, FAILED
-from __init__ import ALL_DONE, ALL_SUCCESS, ALL_FAILED, AT_LEAST_ONE_FAILED, AT_LEAST_ONE_SUCCESS
+from job_center import WAITING, SUCCESS, FAILED
+from job_center import ALL_SUCCESS
 
 class Task(object):
     def __init__(self, job_id, task_id, task_name, script):

@@ -1,14 +1,14 @@
 #!/bin/python
 # -*- coding: utf-8 -*-
-# @File  : job.py
+# @File  : job_center.py
 # @Author: wangms
 # @Date  : 2019/7/15
 # @Brief: 简述报表功能
 import json
 from datetime import datetime, date, timedelta
-from task import Task
-from __init__ import SUCCESS, FAILED, logger
-from __init__ import ALL_DONE, ALL_SUCCESS, ALL_FAILED, AT_LEAST_ONE_FAILED, AT_LEAST_ONE_SUCCESS
+from job_center.task import Task
+from job_center import WAITING, SUCCESS, FAILED
+from job_center import ALL_DONE, ALL_SUCCESS, ALL_FAILED, AT_LEAST_ONE_FAILED, AT_LEAST_ONE_SUCCESS
 
 
 class Job(object):
@@ -19,8 +19,10 @@ class Job(object):
         self.end_task = None
         self.tasks = {}
         self.task_relations = [] # [(before,after), ...]
+        self._status = WAITING
 
-        with open("job_{}.json".format(self.job_id), "r", encoding="utf8") as f:
+
+        with open("job_center/job_{}.json".format(self.job_id), "r", encoding="utf8") as f:
             self.job_json = json.loads(f.read())
 
         self._build()
@@ -47,13 +49,14 @@ class Job(object):
             elif v["step_type_id"] == 2:
                 self.end_task = t
 
-    def next_task(self, task_id=None, status=None):
+    def next_task(self, task_id=None, status=None, exec_result=None):
         if not task_id and not status:
             self.current_tasks[self.start_task.task_id] = self.start_task
             return self.start_task
 
         task = self.current_tasks[task_id]
         task.change_status(status)
+        task.exec_result = exec_result
         final_next_task = {}
 
         if task == self.end_task:

@@ -6,7 +6,7 @@
 # @Brief: 简述报表功能
 
 # from multiprocessing import  Queue
-from task import Task
+from job_center.task import Task
 
 t1= Task(1, "start", "")
 t2= Task(1, "test1", "dir")

@@ -4,8 +4,8 @@
 # @Author: wangms
 # @Date  : 2019/7/15
 # @Brief: 简述报表功能
-from __init__ import _task_queue, _state_queue, logger
-from worker import Worker
+from job_center import _task_queue, _state_queue, logger
+from job_center.worker import Worker
 from multiprocessing import Process
 from threading import Thread
 

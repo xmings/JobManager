@@ -5,8 +5,7 @@
 # @Date  : 2019/6/20
 # @Brief: 简述报表功能
 import subprocess
-from multiprocessing import Process
-from __init__ import SUCCESS, FAILED, logger
+from job_center import SUCCESS, FAILED, logger
 
 class Worker(object):
     def __init__(self, task):
