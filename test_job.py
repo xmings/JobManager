@@ -10,5 +10,7 @@ from task_manager import task_start
 
 if __name__ == '__main__':
     _job_queue.put(1)
+    _job_queue.put(2)
+    _job_queue.put(3)
     job_start()
     task_start()

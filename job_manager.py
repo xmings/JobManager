@@ -38,7 +38,7 @@ class JobManager(object):
                 logger.info("listen_sate: {}".format(state))
                 next_tasks = job.next_task(state.task_id, state._status)
                 self.conn.hset("job_manager.jobs", job.job_id, pickle.dumps(job))
-                logger.info("listen_sate: {}".format(next_tasks))
+                # logger.info("listen_sate: {}".format(next_tasks))
                 if not next_tasks:
                     self.conn.hdel("job_manager.jobs", job.job_id)
                     logger.info("this job has finished: {}".format(job))

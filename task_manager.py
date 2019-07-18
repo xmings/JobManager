@@ -20,7 +20,7 @@ class TaskManager(object):
             worker = Worker(task, state_queue)
             self.all_workers.append(worker)
             worker.run()
-            logger.info("listen_task: start task {}".format(task))
+            # logger.info("listen_task: start task {}".format(task))
 
 
 def task_start():
