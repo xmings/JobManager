@@ -7,6 +7,7 @@
 from __init__ import _task_queue, _state_queue, logger
 from worker import Worker
 from multiprocessing import Process
+from threading import Thread
 
 
 class TaskManager(object):
@@ -17,10 +18,13 @@ class TaskManager(object):
         while True:
             task = task_queue.get()
             logger.info("listen_task: {}".format(task))
-            worker = Worker(task, state_queue)
-            self.all_workers.append(worker)
-            worker.run()
+            #self.all_workers.append(worker)
+            w = Worker(task)
             # logger.info("listen_task: start task {}".format(task))
+
+            p = Thread(target=w.run, args=(state_queue,), name="feed_state")
+            p.setDaemon(True)
+            p.start()
 
 
 def task_start():

@@ -10,7 +10,7 @@
   "2": {
     "task_id": 2,
     "task_name": "finish",
-    "script": "ls -l job.py",
+    "script": "sleep 30&&echo ok",
     "exec_condition_id": 1,
     "next_step_id": null,
     "step_type_id": 2
