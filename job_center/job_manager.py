@@ -43,7 +43,7 @@ class JobManager(object):
                     # self.conn.hdel("job_manager.jobs", job.job_id)
                     job._status = COMPLETED
                     self.conn.hset("job_manager.jobs", job.job_id, pickle.dumps(job))
-                    logger.info("this job_center has finished: {}".format(job))
+                    logger.info("this job has finished: {}".format(job))
                 else:
                     for k, v in next_tasks.items():
                         task_queue.put(v)

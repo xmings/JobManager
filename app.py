@@ -6,13 +6,11 @@
 # @Brief: 简述报表功能
 import pickle, time
 from redis import Redis
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, Response
 import json
 
 app = Flask(__name__)
 
-from job_center.job_manager import job_start
-from job_center.task_manager import task_start
 from job_center import submit_job, job_start, task_start, COMPLETED
 from job_center.task import Task
 from job_center.job import Job
@@ -37,19 +35,18 @@ class CustomJSONEncoder(json.JSONEncoder):
                 "tasks": o.tasks,
                 "status": o._status
             }
+
+
 @app.route("/job")
 def call_job():
     job_id = request.args.get("job_id")
     submit_job(job_id)
     job = None
-    while not job:
+    while not job or job._status != COMPLETED:
+        time.sleep(0.5)
         job_bin = conn.hget("job_manager.jobs", job_id)
         if job_bin:
             job = pickle.loads(job_bin)
-            if job._status == COMPLETED:
-                break
-
-    print(job.tasks)
 
     return Response(json.dumps(job, cls=CustomJSONEncoder, ensure_ascii=False, indent=4), mimetype="application/json")
 
