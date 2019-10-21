@@ -11,13 +11,12 @@ import json
 
 app = Flask(__name__)
 
-from job_center import submit_job, job_start, task_start, COMPLETED
-from job_center.task import Task
-from job_center.job import Job
+from jobcenter import submit_job, job_start, task_start, COMPLETED
+from jobs import Job, Task
 
 job_start()
 task_start()
-conn = Redis(host='192.168.1.111', port=6379, db=0)
+conn = Redis(host='192.168.1.111', port=6379, db=0, password="create")
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, o):

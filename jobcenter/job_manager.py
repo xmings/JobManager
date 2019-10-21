@@ -6,10 +6,11 @@
 # @Brief: 简述报表功能
 import time
 import pickle
+from datetime import datetime
 from redis import Redis
 from multiprocessing import Process, Lock
-from job_center.job import Job
-from job_center import _job_queue, _task_queue, _state_queue, COMPLETED, logger
+from dao import Job
+from jobcenter import _job_queue, _task_queue, _state_queue, COMPLETED, logger, job_queue_listener_running_event
 
 lock = Lock()
 
@@ -27,10 +28,14 @@ class JobManager(object):
             logger.info("listen_job: {}".format(job))
             task_queue.put(job.next_task())
             self.conn.hset("job_manager.jobs", job_id, pickle.dumps(job))
+            job_queue_listener_running_event.set()
+
+    def listen_job_table(self):
+        last_scan_time = datetime.now()
+        while True:
 
     def listen_state_queue(self, task_queue, state_queue):
-        time.sleep(1)
-        while True:
+        while job_queue_listener_running_event.wait():
             state = state_queue.get()
             job_bin = self.conn.hget("job_manager.jobs", state.job_id)
             if job_bin:

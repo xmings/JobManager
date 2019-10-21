@@ -4,15 +4,16 @@
 # @Author: wangms
 # @Date  : 2019/7/15
 # @Brief: 简述报表功能
-from job_center import WAITING, SUCCESS, FAILED
-from job_center import ALL_SUCCESS
+from core import WAITING, SUCCESS, FAILED
+from core import ALL_SUCCESS
 
 class Task(object):
-    def __init__(self, job_id, task_id, task_name, script):
+    def __init__(self, job_id, task_id, task_name, script, _task_type="Shell"):
         self.job_id = job_id
         self.task_id = task_id
         self.task_name = task_name
         self._script = script
+        self._task_type = _task_type
         self._children = ()
         self._status = WAITING
         self._prev_task_ids = ()
@@ -55,13 +56,20 @@ class Task(object):
     def script(self):
         return self._script
 
+    @property
+    def task_type(self):
+        return self._task_type
 
     def __eq__(self, other):
         return True if self.task_id == other.task_id else False
 
     def __str__(self):
-        return "<job_id: {}, task_id: {}, task_name: {}, status: {}, condition: {}, children: {}>".format(
-            self.job_id, self.task_id, self.task_name, self._status, self.exec_condition_id, self._children
+        return "<job_id: {}, task_id: {}, task_type, task_name: {}, status: {}, condition: {}, children: {}>".format(
+            self.job_id, self.task_id, self.task_type, self.task_name, self._status, self.exec_condition_id,
+            self._children
         )
+
+    def __repr__(self):
+        return str(self)
 
     

@@ -5,7 +5,7 @@
 # @Date  : 2019/7/15
 # @Brief: 简述报表功能
 
-from multiprocessing import Queue
+from multiprocessing import Manager
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -13,10 +13,15 @@ console = logging.StreamHandler()
 console.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
 logger.addHandler(console)
 
-_job_queue = Queue()
-_task_queue = Queue()
-_state_queue = Queue()
-_resource_queue = Queue()
+mp_manager = Manager()
+
+_job_queue = mp_manager.Queue()
+_task_queue = mp_manager.Queue()
+_state_queue = mp_manager.Queue()
+_resource_queue = mp_manager.Queue()
+
+job_queue_listener_running_event = mp_manager.Event()
+
 
 
 WAITING = 0
@@ -35,7 +40,7 @@ ALL_DONE = 5
 def submit_job(job_id):
     _job_queue.put(job_id)
 
-from job_center.job_manager import job_start
-from job_center.task_manager import task_start
+from core.job_manager import job_start
+from core.task_manager import task_start
 
 __all__ = ("submit_job", "job_start", "task_start")

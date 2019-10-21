@@ -4,27 +4,34 @@
 # @Author: wangms
 # @Date  : 2019/7/15
 # @Brief: 简述报表功能
-from job_center import _task_queue, _state_queue, logger
-from job_center.worker import Worker
+from core import _task_queue, _state_queue, logger
+from core.worker import Worker
 from multiprocessing import Process
 from threading import Thread
+import time
 
 
 class TaskManager(object):
-    def __init__(self):
+    def __init__(self, worker_count=4):
         self.all_workers = []
+        self.worker_count = worker_count
 
     def listen_task_queue(self, task_queue, state_queue):
         while True:
+            if len(self.all_workers) == self.worker_count:
+                time.sleep(1)
+                continue
+
             task = task_queue.get()
             logger.info("listen_task: {}".format(task))
-            #self.all_workers.append(worker)
+            # self.all_workers.append(worker)
             w = Worker(task)
             # logger.info("listen_task: start task {}".format(task))
 
-            p = Thread(target=w.run, args=(state_queue,), name="feed_state")
+            p = Thread(target=w.run, args=(state_queue, ), name="feed_state")
             p.setDaemon(True)
             p.start()
+
 
 
 def task_start():
