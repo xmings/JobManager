@@ -1,30 +1,26 @@
 #!/bin/python
 # -*- coding: utf-8 -*-
-# @File  : core.py
+# @File  : job_center.py
 # @Author: wangms
 # @Date  : 2019/7/15
 # @Brief: 简述报表功能
 import json
+from uuid import uuid4
 from datetime import datetime, date, timedelta
-from core.task import Task
-from core import WAITING, SUCCESS, FAILED
-from core import ALL_DONE, ALL_SUCCESS, ALL_FAILED, AT_LEAST_ONE_FAILED, AT_LEAST_ONE_SUCCESS
+from jobcenter.task import Task
+from jobcenter import WAITING, SUCCESS, FAILED
+from jobcenter import ALL_DONE, ALL_SUCCESS, ALL_FAILED, AT_LEAST_ONE_FAILED, AT_LEAST_ONE_SUCCESS
 
 
 class Job(object):
-    def __init__(self, job_id):
+    def __init__(self, job_id=uuid4().hex, job_name=None):
         self.job_id = job_id
-        self.current_tasks = {}
+        self.job_name = job_name
         self.start_task = None
         self.end_task = None
         self.tasks = {}
-        self.task_relations = []  # [(before,after), ...]
+        self.current_running_tasks = {}
         self._status = WAITING
-
-        with open("job_{}.json".format(self.job_id), "r", encoding="utf8") as f:
-            self.job_json = json.loads(f.read())
-
-        self._build()
 
     def global_vars(self):
         return {
@@ -33,27 +29,15 @@ class Job(object):
             "start_time": str(datetime.now())
         }
 
-    def _build(self):
-        for v in self.job_json.values():
-            t = Task(self.job_id, v["task_id"], v["task_name"], v["script"])
-            t.replace_vars(self.global_vars())
-            t.exec_condition_id = v["exec_condition_id"]
+    def prev_tasks(self, task_id):
+        pass
 
-            self.tasks[t.task_id] = t
-
-            self.task_relations.append((t.task_id, v["next_step_id"]))
-
-            if v["step_type_id"] == 1:
-                self.start_task = t
-            elif v["step_type_id"] == 2:
-                self.end_task = t
-
-    def next_task(self, task_id=None, status=None, exec_result=None):
+    def next_tasks(self, task_id=None, status=None, exec_result=None):
         if not task_id and not status:
-            self.current_tasks[self.start_task.task_id] = self.start_task
+            self.current_running_tasks[self.start_task.task_id] = self.start_task
             return self.start_task
 
-        task = self.current_tasks[task_id]
+        task = self.current_running_tasks[task_id]
         task.change_status(status)
         task.exec_result = exec_result
         final_next_task = {}
@@ -82,8 +66,8 @@ class Job(object):
                     any(map(lambda x: x.status == SUCCESS, prev_tasks)):
                 final_next_task[child.task_id] = child
 
-        self.current_tasks.pop(task.task_id)
-        self.current_tasks.update(final_next_task)
+        self.current_running_tasks.pop(task.task_id)
+        self.current_running_tasks.update(final_next_task)
 
         return final_next_task
 
@@ -91,8 +75,28 @@ class Job(object):
         return "<job_id: {}, tasks: {}>".format(self.job_id, self.tasks)
 
 
-def build_job_from_db(job_id):
-    pass
+def build_job_from_json(path):
+    # "job_center/job_{}.json".format(self.job_id)
+    with open(path, "r", encoding="utf8") as f:
+        job_json = json.loads(f.read())
 
-def build_job_from_json(job_json):
-    pass
+    job = Job()
+
+    for v in job_json.values():
+        t = Task(job_id=job.job_id, task_id=v["task_id"], task_name=v["task_name"], task_content=v["task_content"])
+        t.replace_vars(job.global_vars())
+        t.exec_condition_id = v["exec_condition_id"]
+        for i in v["prev_task_ids"]:
+            t.add_prev_ids(i)
+        job.tasks[t.task_id] = t
+
+        if v["task_type_id"] == 0:
+            job.start_task = t
+        elif v["task_type_id"] == 2:
+            job.end_task = t
+
+    for t in job.tasks:
+        for i in t.prev_ids:
+            job.tasks[i].add_next_ids(t.task_id)
+
+    return job
