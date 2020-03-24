@@ -28,13 +28,12 @@ class TaskManager(object):
             p.setDaemon(True)
             p.start()
             self.thead_pool.append(p)
-
             while True:
                 alive_thread = len([i for i in self.thead_pool if i.is_alive()])
                 if alive_thread < self.worker_count:
                     break
                 time.sleep(0.2)
-                logger.info(f"Exceeded maximum thread count {self.worker_count}, in fact is {alive_thread}")
+                logger.info(f"Reaches maximum thread count {self.worker_count}")
 
 def task_start():
     t = TaskManager()
