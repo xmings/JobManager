@@ -5,25 +5,40 @@
 # @Date  : 2019/6/20
 # @Brief: 简述报表功能
 import subprocess
-from core import SUCCESS, FAILED, logger
+import sys
+from common import SUCCESS, FAILED, RUNNING, logger
 
 class Worker(object):
-    def __init__(self, task):
-        self.task = task
+    def __init__(self, job_id, job_batch_num, task_id, task_content):
+        self.job_id = job_id
+        self.job_batch_num = job_batch_num
+        self.task_id = task_id
+        self.task_content = task_content
+        self.status = RUNNING
 
     def run(self, state_queue):
+        encoding = "gbk" if sys.platform == "win32" else "utf8"
         try:
-            completed = subprocess.run(self.task.script, shell=True, encoding="utf8",
-                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            logger.info("worker result: {}; {}".format(completed.stdout, completed.stderr))
-            if completed.returncode != 0:
-                raise Exception(completed.stderr)
-            self.task.exec_result = completed.stdout
-            self.task.change_status(SUCCESS)
+            if self.task_content:
+                proc = subprocess.Popen(self.task_content, shell=True, encoding=encoding,
+                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                while proc.poll() is None:
+                    out = proc.stdout.read()
+                    if out:
+                        logger.info(f"[worker] <job_id:{self.job_id}>, "
+                         f"job_batch_num: {self.job_batch_num}, task_id: {self.task_id}: {out}")
+                    err = proc.stderr.read()
+                    if err:
+                        logger.error(f"[worker] This task <job_id:{self.job_id}>, "
+                         f"job_batch_num: {self.job_batch_num}, task_id: {self.task_id} finished with error: {err}")
+                self.status = SUCCESS if proc.returncode == 0 else FAILED
+            else:
+                self.status = SUCCESS
         except Exception as e:
-            self.task.exec_result = e
-            self.task.change_status(FAILED)
+            self.status = FAILED
+            logger.error(f"[worker] This task <job_id:{self.job_id}>, "
+                         f"job_batch_num: {self.job_batch_num}, task_id: {self.task_id} finished with error: {str(e)}")
 
-        state_queue.put(self.task)
+        state_queue.put(self.__dict__)
 
 

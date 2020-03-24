@@ -4,19 +4,39 @@
 # @Author: wangms
 # @Date  : 2019/7/15
 # @Brief: 简述报表功能
-import pickle, time
-from redis import Redis
+import time
 from flask import Flask, request, Response
 import json
+from model.task import Task
+from model.job import Job
+from common import SUCCESS, FAILED
+from dao.redis import JobCenterPersist
+from core import submit_job, job_start, task_start
+
 
 app = Flask(__name__)
 
-from jobcenter import submit_job, job_start, task_start, COMPLETED
-from jobs import Job, Task
-
 job_start()
 task_start()
-conn = Redis(host='192.168.1.111', port=6379, db=0, password="create")
+
+db = JobCenterPersist()
+
+@app.route("/job")
+def execute_job():
+    job_id = int(request.args.get("job_id"))
+    job_batch_num = db.fetch_job_batch_num(job_id)
+
+    with open(f"job_{job_id}.json", "r", encoding="utf8") as f:
+        job_json = json.loads(f.read())
+    submit_job(job_id, job_batch_num, job_json)
+
+    job = None
+    while not job or job.status not in (SUCCESS, FAILED):
+        time.sleep(0.5)
+        job = db.fetch_job_by_id(job_id, job_batch_num)
+
+    return Response(json.dumps(job, cls=CustomJSONEncoder, ensure_ascii=False, indent=4), mimetype="application/json")
+
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, o):
@@ -24,32 +44,18 @@ class CustomJSONEncoder(json.JSONEncoder):
             return {
                 "task_id": o.task_id,
                 "task_name": o.task_name,
-                "exec_condition_id": o.exec_condition_id,
-                "status": o.status,
-                "result": o.exec_result
+                "task_content": o.task_content,
+                "task_type": o.task_type,
+                "exec_condition": o.exec_condition,
+                "prev_task_ids": o.prev_ids,
+                "status": o.status
             }
         elif isinstance(o, Job):
             return {
                 "job_id": o.job_id,
-                "tasks": o.tasks,
+                "tasks": o._tasks,
                 "status": o._status
             }
 
-
-@app.route("/job")
-def call_job():
-    job_id = request.args.get("job_id")
-    submit_job(job_id)
-    job = None
-    while not job or job._status != COMPLETED:
-        time.sleep(0.5)
-        job_bin = conn.hget("job_manager.jobs", job_id)
-        if job_bin:
-            job = pickle.loads(job_bin)
-
-    return Response(json.dumps(job, cls=CustomJSONEncoder, ensure_ascii=False, indent=4), mimetype="application/json")
-
-
-
 if __name__ == "__main__":
-    app.run(threaded=True)
+    app.run()

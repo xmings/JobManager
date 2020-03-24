@@ -10,4 +10,3 @@ from multiprocessing.managers import Namespace
 
 
 
-print(current_process().authkey)
