@@ -3,7 +3,6 @@
 # @File  : job_pool.py
 # @Author: wangms
 # @Date  : 2020/3/24
-# @Brief: 简述报表功能
 from model.job import Job
 from dao.redis import JobCenterPersist
 from threading import Lock

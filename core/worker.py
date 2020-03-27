@@ -3,42 +3,42 @@
 # @File  : worker.py
 # @Author: wangms
 # @Date  : 2019/6/20
-# @Brief: 简述报表功能
 import subprocess
 import sys
 from common import SUCCESS, FAILED, RUNNING, logger
+from dao.zk import JobTaskRunningState
+
 
 class Worker(object):
-    def __init__(self, job_id, job_batch_num, task_id, task_content):
-        self.job_id = job_id
-        self.job_batch_num = job_batch_num
-        self.task_id = task_id
-        self.task_content = task_content
-        self.status = RUNNING
+    def __init__(self, task):
+        self.task = task
+        self.zkStat = JobTaskRunningState()
 
-    def run(self, state_queue):
+    def run(self):
         encoding = "gbk" if sys.platform == "win32" else "utf8"
+        self.task.status = RUNNING
         try:
-            if self.task_content:
-                proc = subprocess.Popen(self.task_content, shell=True, encoding=encoding,
+            if self.task.task_content:
+                proc = subprocess.Popen(self.task.task_content, shell=True, encoding=encoding,
                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 while proc.poll() is None:
                     out = proc.stdout.read()
                     if out:
-                        logger.info(f"[worker] <job_id:{self.job_id}>, "
-                         f"job_batch_num: {self.job_batch_num}, task_id: {self.task_id}: {out}")
+                        logger.info(f"[worker] <job_id:{self.task.job_id}>, "
+                         f"job_batch_num: {self.task.job_batch_num}, task_id: {self.task.task_id}: {out}")
                     err = proc.stderr.read()
                     if err:
-                        logger.error(f"[worker] This task <job_id:{self.job_id}>, "
-                         f"job_batch_num: {self.job_batch_num}, task_id: {self.task_id} finished with error: {err}")
-                self.status = SUCCESS if proc.returncode == 0 else FAILED
+                        logger.error(f"[worker] This task <job_id:{self.task.job_id}>, "
+                         f"job_batch_num: {self.task.job_batch_num}, task_id: {self.task.task_id} finished with error: {err}")
+                self.task.status = SUCCESS if proc.returncode == 0 else FAILED
             else:
-                self.status = SUCCESS
+                self.task.status = SUCCESS
         except Exception as e:
-            self.status = FAILED
-            logger.error(f"[worker] This task <job_id:{self.job_id}>, "
-                         f"job_batch_num: {self.job_batch_num}, task_id: {self.task_id} finished with error: {str(e)}")
+            self.task.status = FAILED
+            logger.error(f"[worker] This task <job_id:{self.task.job_id}>, "
+                         f"job_batch_num: {self.task.job_batch_num}, task_id: {self.task.task_id} finished with error: {str(e)}")
 
-        state_queue.put(self.__dict__)
+
+        self.zkStat.update_task(task=self.task)
 
 

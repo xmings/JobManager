@@ -3,7 +3,6 @@
 # @File  : app.py
 # @Author: wangms
 # @Date  : 2019/7/15
-# @Brief: 简述报表功能
 import time
 from flask import Flask, request, Response
 import json

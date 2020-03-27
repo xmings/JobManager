@@ -3,7 +3,6 @@
 # @File  : __init__.py
 # @Author: wangms
 # @Date  : 2019/7/15
-# @Brief: 简述报表功能
 from common import logger
 from multiprocessing import Manager
 

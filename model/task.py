@@ -3,7 +3,6 @@
 # @File  : task.py
 # @Author: wangms
 # @Date  : 2019/7/15
-# @Brief: 简述报表功能
 from uuid import uuid4
 from common import WAITING, SUCCESS, FAILED, RUNNING
 from common import ALL_SUCCESS
