@@ -1,6 +1,6 @@
 #!/bin/python
 # -*- coding: utf-8 -*-
-# @File  : job_pool.py
+# @File  : job_cache_pool.py
 # @Author: wangms
 # @Date  : 2020/3/24
 from model.job import Job
@@ -35,7 +35,6 @@ class JobPool(object):
                 pool.append(job)
             self._pool = tuple(pool)
             self.db.save_job(job)
-
 
     def fetch_job(self, job_id, job_batch_num):
         with lock:

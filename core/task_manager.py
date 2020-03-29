@@ -3,57 +3,81 @@
 # @File  : task_manager.py
 # @Author: wangms
 # @Date  : 2019/7/15
-from core.worker import Worker
-from threading import Thread
-from common import logger
+from threading import Thread, current_thread
+from common import logger, RUNNING, FAILED, SUCCESS
 import time
-
-from dao.zk import JobTaskRunningState
-
+import sys
+import socket
+import subprocess
+from .job_state_manager import ZKJobStateManager
 
 class TaskManager(object):
-    def __init__(self, worker_count=5):
-        self.worker_count = worker_count
-        self.zkStat = JobTaskRunningState()
-        self.thead_pool = []
+    def __init__(self, max_task_count=5):
+        self.max_task_count = max_task_count
+        self.zk = ZKJobStateManager()
+        self.task_pool = {}
+        # 注册当前任务节点为临时节点
+        self.task_node_id = self.zk.fetch_task_node_id()
+        self.task_node_path = f"{self.zk.node_register_base_path}/{self.task_node_id}"
+        self.zk.create(self.task_node_path, {
+            "task_node_id": self.task_node_id,
+            "max_task_count": self.max_task_count,
+            "current_task_count": 0,
+            "status": "online",
+            "ip_addr": socket.gethostbyname(socket.gethostname()),
+            "thread_id":  current_thread().ident
+        })
+        self.zk.children_listener_callback(self.task_node_path, self.task_listener_callback)
+        self.job_task_id_list = []
 
-    def listen_task_queue(self, task_queue):
-        alive_thread = 0
-        while True:
-            task = task_queue.get()
-            alive_thread += 1
-            logger.info("[task listener] {}".format(task))
-            w = Worker(task)
-
-            p = Thread(target=w.run, name="feed_state")
+    def task_listener_callback(self, children):
+        """获取job_manager分配到的任务，并更新该任务的状态和执行节点"""
+        logger.info(f"task_listener_callback: children:{children}")
+        for job_task_id in filter(lambda x: x not in self.task_id_list, children):
+            job_id, job_batch_num, task_id = job_task_id.split("_")
+            self.zk.update_task(job_id, job_batch_num, task_id, {"status": RUNNING, "exec_task_node": self.task_node_id})
+            p = Thread(target=self.task_worker,
+                       args=(job_id, job_batch_num, task_id),
+                       name="task_worker")
             p.setDaemon(True)
             p.start()
-            self.thead_pool.append(p)
-            while True:
-                alive_thread = len([i for i in self.thead_pool if i.is_alive()])
-                if alive_thread < self.worker_count:
-                    break
-                time.sleep(0.2)
-                logger.info(f"Reaches maximum thread count {self.worker_count}")
+            self.task_pool[job_task_id] = p
+        self.task_id_list = children
 
-    def fetch_task(self):
-        jobs = self.zkStat.fetch_running_job()
+    def run(self):
+        while True:
+            time.sleep(15)
+            self.zk.update_data(self.task_node_path, {"current_task_count": len(self.task_pool)})
 
+    def task_worker(self, job_id, job_batch_num, task_id):
+        encoding = "gbk" if sys.platform == "win32" else "utf8"
+        status = FAILED
+        data = self.zk.fetch_task_data_by_id(job_id, job_batch_num, task_id)
+        try:
+            if data.get("task_content"):
+                proc = subprocess.Popen(data.get("task_content"), shell=True, encoding=encoding,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                while proc.poll() is None:
+                    out = proc.stdout.read()
+                    if out:
+                        logger.info(f"[worker] <job_id:{job_id}>, "
+                                    f"job_batch_num: {job_batch_num}, task_id: {task_id}: {out}")
+                    err = proc.stderr.read()
+                    if err:
+                        logger.error(f"[worker] This task <job_id:{job_id}>, "
+                                     f"job_batch_num: {job_batch_num}, task_id: {task_id} finished with error: {err}")
+                status = SUCCESS if proc.returncode == 0 else FAILED
+        except Exception as e:
+            logger.error(f"[worker] This task <job_id:{job_id}>, "
+                         f"job_batch_num: {job_batch_num}, task_id: {task_id} finished with error: {str(e)}")
 
-        pass
-
-    def register_heartbeat(self):
-        pass
-
-    def register_resource(self):
-        pass
-
+        self.zk.update_task(job_id, job_batch_num, task_id, {"status": status})
 
 def task_start():
     t = TaskManager()
-    task_listener = Thread(target=t.listen_task_queue, name="task_listener")
-    task_listener.start()
-    return (task_listener,)
+    task_manager = Thread(target=t.run, name="task_manager")
+    task_manager.start()
+    return (task_manager,)
 
 if __name__ == '__main__':
     task_start()

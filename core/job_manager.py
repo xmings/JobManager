@@ -4,46 +4,96 @@
 # @Author: wangms
 # @Date  : 2019/7/15
 import time
-from threading import Thread, Event
-from core import _job_queue, _task_queue, _state_queue
+from datetime import datetime, timedelta
+from threading import Thread
+from core import _job_queue
 from common import PREPARE, RUNNING, SUCCESS, FAILED, logger
-from dao.zk import JobTaskRunningState
+from .job_state_manager import ZKJobStateManager
 from model.job import Job
 from model.task import Task
-from core.job_pool import JobPool
+from core.job_cache_pool import JobPool
 from common import ALL_DONE, ALL_SUCCESS, ALL_FAILED, AT_LEAST_ONE_FAILED, AT_LEAST_ONE_SUCCESS
 
-job_queue_listener_running_event = Event()
 
 class JobManager(object):
     def __init__(self):
         self.job_pool = JobPool()
-        self.zkStat = JobTaskRunningState()
-        # 启动时加载上次未完成的Job，略
+        # TODO 启动时加载上次未完成的Job
+        self.task_nodes = {}
+        self.zk = ZKJobStateManager()
+        self.zk.children_listener_callback(self.zk.node_register_base_path, self.node_register_callback)
 
     def listen_job_queue(self, job_queue):
         while True:
             job_id, job_batch_num, job_content = job_queue.get()
             job = self.build_job_from_json(job_id, job_batch_num, job_content)
             logger.info(f"[job listener] {job}")
+            if not self.task_nodes:
+                logger.error("Not any task_manager is been found, Pls submit job just a moment")
+                continue
             job.status = RUNNING
+            self.zk.create_job_with_tasks(job)
+            job.start_task.status = PREPARE
             self.job_pool.add_job(job)
-            self.next_executable_tasks(job=job)
-            self.zkStat.init_job(job)
-            for t in job.current_prepare_tasks:
-                self.zkStat.job_task_change_listener(t, self.task_finish_action)
+            self.assign_task(job.start_task, force=True)
 
+    def assign_task(self, task: Task, force=False):
+        task_path = self.zk.generate_path_by_id(task.job_id, task.job_batch_num, task.task_id)
+        for task_node_id, info in self.task_nodes.items():
+            if info.get("update_time") < datetime.now() - timedelta(minutes=20):
+                # TODO: 节点掉线，需要task manager重新注册，该检测机制为被动触发，待改进
+                self.zk.update_data(f"{self.zk.node_register_base_path}/{info.get('task_node_id')}",
+                                    {"status": "offline"})
+                continue
 
-    def task_finish_action(self, data, stat):
-        print(data, stat)
+            if info.get("current_task_count") < info.get("max_task_count"):
+                self.zk.data_listener_callback(task_path, self.task_finish_callback)
+                path = f"{self.zk.node_register_base_path}/{task_node_id}/{task.job_id}_{task.job_batch_num}_{task.task_id}"
+                self.zk.create(path)
+                info["current_task_count"] += 1
+                return True  # 保证一个任务只被分配给一个task manager
+
+        if force:
+            self.zk.data_listener_callback(task_path, self.task_finish_callback)
+            task_node_id = list(filter(lambda x: self.task_nodes[x]["status"] != "offline", self.task_nodes))[-1]
+            path = f"{self.zk.node_register_base_path}/{task_node_id}/{task.job_id}_{task.job_batch_num}_{task.task_id}"
+            self.zk.create(path)
+            self.task_nodes[task_node_id]["current_task_count"] += 1
+            return True
+
+        return False
+
+    def task_finish_callback(self, data, state):
+        logger.info(f"task_finish_callback: data:{data}, state:{state}")
         job = self.job_pool.fetch_job(job_id=data.get("job_id"), job_batch_num=data.get("job_batch_num"))
         task = job.get_task(data.get("task_id"))
         task.status = int(data.get("status"))
-        self.next_executable_tasks(task)
+        if task.status in (SUCCESS, FAILED):
+            self.next_executable_tasks(task)
+            for t in job.current_prepare_tasks:
+                self.assign_task(t)
         self.job_pool.update_job(job)
-        self.zkStat.create_or_update_job(job)
-        return True
+        return True  # 返回True，关闭监听节点
 
+    def node_register_callback(self, children):
+        for task_node_id in children:
+            if task_node_id not in self.task_nodes:
+                path = f"{self.zk.node_register_base_path}/{task_node_id}"
+                self.task_nodes[task_node_id] = self.zk.fetch_data(path)
+                self.zk.data_listener_callback(path, self.node_resouce_listener_callback)
+
+        # 由于临时节点下不能创建子节点，所以task manager注册时创建的节点改为永久节点，故以下代码失去意义
+        # for task_node_id in self.task_nodes.keys():
+        #     if task_node_id not in children:
+        #         self.task_nodes[task_node_id].update({"status": "offline"})
+        #         # TODO 节点离线，已分配给该节点正在运行的任务需要重分配给其他节点
+
+    def node_resouce_listener_callback(self, data, state):
+        if data:
+            task_node_id = data.get("task_node_id")
+            data["update_time"] = datetime.fromtimestamp(state.mtime / 1000)
+            self.task_nodes[task_node_id].update(data)
+            logger.info(f"[node_resouce_listener_callback]: data:{data}, state:{state}")
 
     @classmethod
     def build_job_from_json(cls, job_id, job_batch_num, job_content):
@@ -62,16 +112,12 @@ class JobManager(object):
 
         return job
 
-    def next_executable_tasks(self, task: Task = None, job: Job = None, prepare = True):
-        j = self.job_pool.fetch_job(job_id=task.task_id, job_batch_num=task.job_batch_num)
+    def next_executable_tasks(self, task: Task):
+        job = self.job_pool.fetch_job(job_id=task.job_id, job_batch_num=task.job_batch_num)
 
         final_next_task = []
-        if not j:
-            if prepare:
-                job.start_task.status = PREPARE
-            return [job.start_task]
         # 如果作业已经结束就不会继续作下一个任务的计算
-        if self.status in (SUCCESS, FAILED):
+        if job.status in (SUCCESS, FAILED):
             return final_next_task
 
         # 如果任务未结束也不会计算下一个任务
@@ -99,16 +145,15 @@ class JobManager(object):
         # 如果不是end_task并且final_next_task为空，说明依赖未满足，作业执行失败
         if final_next_task == []:
             if task == job.end_task:
-                self.status = SUCCESS
-                logger.info("[job] this job has finished: {}".format(self))
+                job.status = SUCCESS
+                logger.info("[job] this job has finished: {}".format(job))
             else:
                 if all([i.status != RUNNING for i in job._tasks.values()]):
-                    self.status = FAILED
-                    logger.info("[job] this job finished with error: {}".format(self))
+                    job.status = FAILED
+                    logger.info("[job] this job finished with error: {}".format(job))
 
-        if prepare:
-            for t in final_next_task:
-                t.status = PREPARE
+        for task in final_next_task:
+            task.status = PREPARE
 
         return final_next_task
 
@@ -130,15 +175,11 @@ class JobManager(object):
 
 def job_start():
     j = JobManager()
-    job_listener = Thread(target=j.listen_job_queue, args=(_job_queue, _task_queue), name="job_listener")
+    job_listener = Thread(target=j.listen_job_queue, args=(_job_queue,), name="job_listener")
     job_listener.start()
-    state_listener = Thread(target=j.listen_state_queue, args=(_task_queue, _state_queue), name="state_listener")
-    state_listener.start()
 
-    return job_listener, state_listener
+    return job_listener
 
 
 if __name__ == '__main__':
     job_start()
-
-

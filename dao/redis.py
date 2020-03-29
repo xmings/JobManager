@@ -31,6 +31,8 @@ class JobCenterPersist(object):
 
     def fetch_job_by_id(self, job_id, job_batch_num):
         value = self.conn.hgetall(f"jobmanager.job-{job_id}-{job_batch_num}")
+        if not value:
+            return None
         job = Job(job_id=job_id, job_batch_num=job_batch_num)
         job.job_name = value.get(b"job_name").decode("utf8")
         job.status = int(value.get(b"status").decode("utf8"))

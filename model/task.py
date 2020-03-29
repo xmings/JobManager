@@ -4,7 +4,7 @@
 # @Author: wangms
 # @Date  : 2019/7/15
 from uuid import uuid4
-from common import WAITING, SUCCESS, FAILED, RUNNING
+from common import WAITING, PREPARE, SUCCESS, FAILED, RUNNING
 from common import ALL_SUCCESS
 
 
@@ -29,7 +29,7 @@ class Task(object):
 
     @status.setter
     def status(self, status):
-        assert status in (WAITING, RUNNING, SUCCESS, FAILED)
+        assert status in (WAITING, PREPARE, RUNNING, SUCCESS, FAILED)
         self._status = status
 
     def add_prev_id(self, task_id):

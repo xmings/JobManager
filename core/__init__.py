@@ -16,9 +16,9 @@ _resource_queue = mp_manager.Queue()
 job_queue_listener_running_event = mp_manager.Event()
 
 
-def submit_job(job_id, job_batch_id, job_content):
-    logger.info(f"submit job: <job_id: {job_id}, job_batch_id: {job_batch_id}>")
-    _job_queue.put((job_id, job_batch_id, job_content))
+def submit_job(job_id, job_batch_num, job_content):
+    logger.info(f"submit job: <job_id: {job_id}, job_batch_num: {job_batch_num}>")
+    _job_queue.put((job_id, job_batch_num, job_content))
 
 from .job_manager import job_start
 from .task_manager import task_start
