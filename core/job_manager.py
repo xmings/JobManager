@@ -5,8 +5,6 @@
 # @Date  : 2019/7/15
 import time
 from datetime import datetime, timedelta
-from threading import Thread
-from core import _job_queue
 from common import PREPARE, RUNNING, SUCCESS, FAILED, logger
 from .job_state_manager import ZKJobStateManager
 from model.job import Job
@@ -23,19 +21,19 @@ class JobManager(object):
         self.zk = ZKJobStateManager()
         self.zk.children_listener_callback(self.zk.node_register_base_path, self.node_register_callback)
 
-    def listen_job_queue(self, job_queue):
-        while True:
-            job_id, job_batch_num, job_content = job_queue.get()
-            job = self.build_job_from_json(job_id, job_batch_num, job_content)
-            logger.info(f"[job listener] {job}")
-            if not self.task_nodes:
-                logger.error("Not any task_manager is been found, Pls submit job just a moment")
-                continue
-            job.status = RUNNING
-            self.zk.create_job_with_tasks(job)
-            job.start_task.status = PREPARE
-            self.job_pool.add_job(job)
-            self.assign_task(job.start_task, force=True)
+    def job_submit(self, job_id, job_content):
+        job_batch_num = self.zk.fetch_job_batch_num()
+        job = self.build_job_from_json(job_id, job_batch_num, job_content)
+        logger.info(f"[job listener] {job}")
+        if not self.task_nodes:
+            logger.error("Not any task_manager is been found, Pls submit job just a moment")
+            return None
+        job.status = RUNNING
+        self.zk.create_job_with_tasks(job)
+        job.start_task.status = PREPARE
+        self.job_pool.add_job(job)
+        self.assign_task(job.start_task, force=True)
+        return job
 
     def assign_task(self, task: Task, force=False):
         task_path = self.zk.generate_path_by_id(task.job_id, task.job_batch_num, task.task_id)
@@ -171,15 +169,3 @@ class JobManager(object):
             if job:
                 return job
             time.sleep(1)
-
-
-def job_start():
-    j = JobManager()
-    job_listener = Thread(target=j.listen_job_queue, args=(_job_queue,), name="job_listener")
-    job_listener.start()
-
-    return job_listener
-
-
-if __name__ == '__main__':
-    job_start()

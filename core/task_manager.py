@@ -11,6 +11,7 @@ import socket
 import subprocess
 from .job_state_manager import ZKJobStateManager
 
+
 class TaskManager(object):
     def __init__(self, max_task_count=5):
         self.max_task_count = max_task_count
@@ -73,12 +74,10 @@ class TaskManager(object):
 
         self.zk.update_task(job_id, job_batch_num, task_id, {"status": status})
 
-def task_start():
-    t = TaskManager()
-    task_manager = Thread(target=t.run, name="task_manager")
-    task_manager.start()
-    return (task_manager,)
 
-if __name__ == '__main__':
-    task_start()
+def task_manager_start():
+    t = TaskManager()
+    task_manager_process = Thread(target=t.run, name="task_manager")
+    task_manager_process.start()
+    return task_manager_process
 

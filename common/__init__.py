@@ -3,6 +3,7 @@
 # @File  : __init__.py.py
 # @Author: wangms
 # @Date  : 2020/3/24
+import os
 import logging
 
 WAITING = 0
@@ -22,7 +23,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 console = logging.StreamHandler()
 console.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
-file = logging.FileHandler("job_manager.log")
+log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log", "job_manager.log")
+file = logging.FileHandler(log_file)
 file.setFormatter(logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
 logger.addHandler(console)
 logger.addHandler(file)

@@ -3,9 +3,10 @@
 # @File  : job.py
 # @Author: wangms
 # @Date  : 2019/7/15
+import time
 from datetime import datetime, date, timedelta
 from model.task import Task
-from common import WAITING, PREPARE, RUNNING
+from common import WAITING, PREPARE, RUNNING, FAILED, SUCCESS
 
 
 class Job(object):
@@ -67,6 +68,13 @@ class Job(object):
             self.start_task = task
         elif task.task_type == 2:
             self.end_task = task
+
+    def poll(self):
+        return None if self.status == RUNNING else self.status
+
+    def wait(self):
+        while self.poll() is not None:
+            time.sleep(1)
 
     def __str__(self):
         return "<job_id: {}, job_batch_num: {}, job_name: {}, status: {}, tasks: {}>"\

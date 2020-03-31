@@ -3,26 +3,10 @@
 # @File  : __init__.py
 # @Author: wangms
 # @Date  : 2019/7/15
-from common import logger
-from multiprocessing import Manager
 
-mp_manager = Manager()
+from .task_manager import task_manager_start
+from .job_manager import JobManager
 
-_job_queue = mp_manager.Queue()
-_task_queue = mp_manager.Queue()
-_state_queue = mp_manager.Queue()
-_resource_queue = mp_manager.Queue()
+job_manager = JobManager()
 
-job_queue_listener_running_event = mp_manager.Event()
-
-
-def submit_job(job_id, job_batch_num, job_content):
-    logger.info(f"submit job: <job_id: {job_id}, job_batch_num: {job_batch_num}>")
-    _job_queue.put((job_id, job_batch_num, job_content))
-
-from .job_manager import job_start
-from .task_manager import task_start
-from model.job import Job
-from model.task import Task
-
-__all__ = ("submit_job", "job_start", "task_start", "Job", "Task")
+__all__ = ("job_manager", "task_manager_start")

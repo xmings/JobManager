@@ -3,37 +3,26 @@
 # @File  : app.py
 # @Author: wangms
 # @Date  : 2019/7/15
-import time
 from flask import Flask, request, Response
 import json
 from model.task import Task
 from model.job import Job
-from common import SUCCESS, FAILED
-from dao.redis import JobCenterPersist
-from core import submit_job, job_start, task_start
+from core import job_manager, task_manager_start
 
 
 app = Flask(__name__)
+task_manager_start()
 
-job_start()
-task_start()
-
-db = JobCenterPersist()
 
 @app.route("/job")
 def execute_job():
     job_id = int(request.args.get("job_id"))
-    job_batch_num = db.fetch_job_batch_num(job_id)
-
     with open(f"job_{job_id}.json", "r", encoding="utf8") as f:
         job_json = json.loads(f.read())
-    submit_job(job_id, job_batch_num, job_json)
-
-    job = None
-    while not job or job.status not in (SUCCESS, FAILED):
-        time.sleep(0.5)
-        job = db.fetch_job_by_id(job_id, job_batch_num)
-
+    job = job_manager.job_submit(job_id, job_json)
+    if job is None:
+        return Response("提交作业失败，详情请查看日志", status=400)
+    job.wait()
     return Response(json.dumps(job, cls=CustomJSONEncoder, ensure_ascii=False, indent=4), mimetype="application/json")
 
 
@@ -52,9 +41,11 @@ class CustomJSONEncoder(json.JSONEncoder):
         elif isinstance(o, Job):
             return {
                 "job_id": o.job_id,
-                "tasks": o._tasks,
-                "status": o._status
+                "job_batch_num": o.job_batch_num,
+                "tasks": o.tasks,
+                "status": o.status
             }
+
 
 if __name__ == "__main__":
     app.run()
