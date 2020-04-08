@@ -5,9 +5,9 @@
 # @Date  : 2019/7/15
 from flask import Flask, request, Response
 import json
-from model.task import Task
-from model.job import Job
-from core import job_manager, task_manager_start
+from .model.task import Task
+from .model.job import Job
+from .core import job_manager, task_manager_start
 
 
 app = Flask(__name__)

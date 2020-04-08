@@ -4,14 +4,15 @@
 # @Author: wangms
 # @Date  : 2019/7/15
 from threading import Thread, current_thread
-from common import logger, RUNNING, FAILED, SUCCESS
+from common import RUNNING, FAILED, SUCCESS, sl4py
 import time
 import sys
 import socket
 import subprocess
+from datetime import datetime
 from .job_state_manager import ZKJobStateManager
 
-
+@sl4py
 class TaskManager(object):
     def __init__(self, max_task_count=5):
         self.max_task_count = max_task_count
@@ -33,14 +34,17 @@ class TaskManager(object):
 
     def task_listener_callback(self, children):
         """获取job_manager分配到的任务，并更新该任务的状态和执行节点"""
-        logger.info(f"task_listener_callback: children:{children}")
+        self.logger.info(f"task_listener_callback: children:{children}")
         for job_task_id in filter(lambda x: x not in self.task_id_list, children):
             job_id, job_batch_num, task_id = job_task_id.split("_")
-            self.zk.update_task(job_id, job_batch_num, task_id, {"status": RUNNING, "exec_task_node": self.task_node_id})
+            self.zk.update_task(job_id, job_batch_num, task_id, {
+                "status": RUNNING,
+                "exec_task_node": self.task_node_id,
+                "start_time": datetime.now().isoformat()
+            })
             p = Thread(target=self.task_worker,
                        args=(job_id, job_batch_num, task_id),
                        name="task_worker")
-            p.setDaemon(True)
             p.start()
             self.task_pool[job_task_id] = p
         self.task_id_list = children
@@ -61,18 +65,21 @@ class TaskManager(object):
                 while proc.poll() is None:
                     out = proc.stdout.read()
                     if out:
-                        logger.info(f"[worker] <job_id:{job_id}>, "
+                        self.logger.info(f"[worker] <job_id:{job_id}>, "
                                     f"job_batch_num: {job_batch_num}, task_id: {task_id}: {out}")
                     err = proc.stderr.read()
                     if err:
-                        logger.error(f"[worker] This task <job_id:{job_id}>, "
+                        self.logger.error(f"[worker] This task <job_id:{job_id}>, "
                                      f"job_batch_num: {job_batch_num}, task_id: {task_id} finished with error: {err}")
                 status = SUCCESS if proc.returncode == 0 else FAILED
         except Exception as e:
-            logger.error(f"[worker] This task <job_id:{job_id}>, "
+            self.logger.error(f"[worker] This task <job_id:{job_id}>, "
                          f"job_batch_num: {job_batch_num}, task_id: {task_id} finished with error: {str(e)}")
 
-        self.zk.update_task(job_id, job_batch_num, task_id, {"status": status})
+        self.zk.update_task(job_id, job_batch_num, task_id, {
+            "status": status,
+            "finish_time": datetime.now().isoformat()
+        })
 
 
 def task_manager_start():

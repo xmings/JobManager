@@ -5,14 +5,14 @@
 # @Date  : 2019/7/15
 import time
 from datetime import datetime, timedelta
-from common import PREPARE, RUNNING, SUCCESS, FAILED, logger
+from common import PREPARE, RUNNING, SUCCESS, FAILED, sl4py
 from .job_state_manager import ZKJobStateManager
 from model.job import Job
 from model.task import Task
 from core.job_cache_pool import JobPool
 from common import ALL_DONE, ALL_SUCCESS, ALL_FAILED, AT_LEAST_ONE_FAILED, AT_LEAST_ONE_SUCCESS
 
-
+@sl4py
 class JobManager(object):
     def __init__(self):
         self.job_pool = JobPool()
@@ -24,45 +24,40 @@ class JobManager(object):
     def job_submit(self, job_id, job_content):
         job_batch_num = self.zk.fetch_job_batch_num()
         job = self.build_job_from_json(job_id, job_batch_num, job_content)
-        logger.info(f"[job listener] {job}")
-        if not self.task_nodes:
-            logger.error("Not any task_manager is been found, Pls submit job just a moment")
+        self.logger.info(f"[job listener] {job}")
+        if any(filter(lambda y: y.get("state") == "online", self.task_nodes.values())):
+            self.logger.error("Not any valid task_manager is been found, Pls submit job just a moment")
             return None
         job.status = RUNNING
         self.zk.create_job_with_tasks(job)
         job.start_task.status = PREPARE
         self.job_pool.add_job(job)
-        self.assign_task(job.start_task, force=True)
+        self.assign_task(job.start_task)
         return job
 
-    def assign_task(self, task: Task, force=False):
+    def assign_task(self, task: Task):
         task_path = self.zk.generate_path_by_id(task.job_id, task.job_batch_num, task.task_id)
-        for task_node_id, info in self.task_nodes.items():
-            if info.get("update_time") < datetime.now() - timedelta(minutes=20):
-                # TODO: 节点掉线，需要task manager重新注册，该检测机制为被动触发，待改进
-                self.zk.update_data(f"{self.zk.node_register_base_path}/{info.get('task_node_id')}",
-                                    {"status": "offline"})
-                continue
+        while True:
+            for task_node_id, info in self.task_nodes.items():
+                if info.get("state") == "offline":
+                    continue
+                elif info.get("update_time") < datetime.now() - timedelta(seconds=20):
+                    # TODO: 节点掉线，需要task manager重新注册，该检测机制为被动触发，待改进
+                    self.task_nodes[task_node_id].update({"state": "offline"})
+                    continue
 
-            if info.get("current_task_count") < info.get("max_task_count"):
-                self.zk.data_listener_callback(task_path, self.task_finish_callback)
-                path = f"{self.zk.node_register_base_path}/{task_node_id}/{task.job_id}_{task.job_batch_num}_{task.task_id}"
-                self.zk.create(path)
-                info["current_task_count"] += 1
-                return True  # 保证一个任务只被分配给一个task manager
+                if info.get("current_task_count") < info.get("max_task_count"):
+                    self.zk.data_listener_callback(task_path, self.task_finish_callback)
+                    path = f"{self.zk.node_register_base_path}/{task_node_id}/{task.job_id}_{task.job_batch_num}_{task.task_id}"
+                    self.zk.create(path)
+                    info["current_task_count"] += 1
+                    return True  # 保证一个任务只被分配给一个task manager
 
-        if force:
-            self.zk.data_listener_callback(task_path, self.task_finish_callback)
-            task_node_id = list(filter(lambda x: self.task_nodes[x]["status"] != "offline", self.task_nodes))[-1]
-            path = f"{self.zk.node_register_base_path}/{task_node_id}/{task.job_id}_{task.job_batch_num}_{task.task_id}"
-            self.zk.create(path)
-            self.task_nodes[task_node_id]["current_task_count"] += 1
-            return True
-
-        return False
+            # 没有资源就等待5秒重新尝试分配
+            time.sleep(5)
 
     def task_finish_callback(self, data, state):
-        logger.info(f"task_finish_callback: data:{data}, state:{state}")
+        self.logger.info(f"task_finish_callback: data:{data}, state:{state}")
         job = self.job_pool.fetch_job(job_id=data.get("job_id"), job_batch_num=data.get("job_batch_num"))
         task = job.get_task(data.get("task_id"))
         task.status = int(data.get("status"))
@@ -91,7 +86,7 @@ class JobManager(object):
             task_node_id = data.get("task_node_id")
             data["update_time"] = datetime.fromtimestamp(state.mtime / 1000)
             self.task_nodes[task_node_id].update(data)
-            logger.info(f"[node_resouce_listener_callback]: data:{data}, state:{state}")
+            self.logger.info(f"[node_resouce_listener_callback]: data:{data}, state:{state}")
 
     @classmethod
     def build_job_from_json(cls, job_id, job_batch_num, job_content):
@@ -144,11 +139,11 @@ class JobManager(object):
         if final_next_task == []:
             if task == job.end_task:
                 job.status = SUCCESS
-                logger.info("[job] this job has finished: {}".format(job))
+                self.logger.info("[job] this job has finished: {}".format(job))
             else:
                 if all([i.status != RUNNING for i in job._tasks.values()]):
                     job.status = FAILED
-                    logger.info("[job] this job finished with error: {}".format(job))
+                    self.logger.info("[job] this job finished with error: {}".format(job))
 
         for task in final_next_task:
             task.status = PREPARE
