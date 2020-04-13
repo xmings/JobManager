@@ -23,13 +23,14 @@ class ZKJobStateManager(object):
         self.job_batch_num_path = f"{self.job_data_base_path}/job_batch_num"
         self.node_register_base_path = f"{self.job_data_base_path}/node_register"
 
+        self.zk.ensure_path(self.job_data_base_path)
         self.zk.ensure_path(self.task_base_path)
         self.zk.ensure_path(self.task_node_id_path)
         self.zk.ensure_path(self.job_batch_num_path)
 
         if self.zk.exists(self.node_register_base_path):
             self.zk.delete(self.node_register_base_path, recursive=True)
-            self.zk.create(self.node_register_base_path)
+        self.zk.create(self.node_register_base_path)
 
     def __del__(self):
         self.zk.close()
@@ -143,3 +144,6 @@ class ZKJobStateManager(object):
 
     def __getattr__(self, item):
         return getattr(self.zk, item)
+
+
+zk = ZKJobStateManager()

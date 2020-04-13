@@ -3,7 +3,6 @@
 # @File  : __init__.py.py
 # @Author: wangms
 # @Date  : 2020/3/24
-from .logutils import sl4py
 from dataclasses import dataclass
 
 WAITING = 0

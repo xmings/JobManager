@@ -7,7 +7,7 @@ from flask import Flask, request, Response
 import json
 from .model.task import Task
 from .model.job import Job
-from .core import job_manager, task_manager_start
+from .core import jobmanager, task_manager_start
 
 
 app = Flask(__name__)
@@ -19,7 +19,7 @@ def execute_job():
     job_id = int(request.args.get("job_id"))
     with open(f"job_{job_id}.json", "r", encoding="utf8") as f:
         job_json = json.loads(f.read())
-    job = job_manager.job_submit(job_id, job_json)
+    job = jobmanager.job_submit(job_id, job_json)
     if job is None:
         return Response("提交作业失败，详情请查看日志", status=400)
     job.wait()

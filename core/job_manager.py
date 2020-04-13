@@ -5,28 +5,31 @@
 # @Date  : 2019/7/15
 import time
 from datetime import datetime, timedelta
-from common import PREPARE, RUNNING, SUCCESS, FAILED, sl4py
-from .job_state_manager import ZKJobStateManager
+from common import PREPARE, RUNNING, SUCCESS, FAILED
+from .job_state_manager import zk
 from model.job import Job
 from model.task import Task
 from core.job_cache_pool import JobPool
 from common import ALL_DONE, ALL_SUCCESS, ALL_FAILED, AT_LEAST_ONE_FAILED, AT_LEAST_ONE_SUCCESS
+from threading import current_thread
 
-@sl4py
+
 class JobManager(object):
     def __init__(self):
         self.job_pool = JobPool()
         # TODO 启动时加载上次未完成的Job
         self.task_nodes = {}
-        self.zk = ZKJobStateManager()
+        self.zk = zk
         self.zk.children_listener_callback(self.zk.node_register_base_path, self.node_register_callback)
 
     def job_submit(self, job_id, job_content):
         job_batch_num = self.zk.fetch_job_batch_num()
         job = self.build_job_from_json(job_id, job_batch_num, job_content)
-        self.logger.info(f"[job listener] {job}")
-        if any(filter(lambda y: y.get("state") == "online", self.task_nodes.values())):
-            self.logger.error("Not any valid task_manager is been found, Pls submit job just a moment")
+        # self.logger.info(f"[job listener] {job}")
+        print(f"[job listener] {job}")
+        if not any(filter(lambda y: y.get("status") == "online", self.task_nodes.values())):
+            # self.logger.error("Not any valid task_manager is been found, Pls submit job just a moment")
+            print("Not any valid task_manager is been found, Pls submit job just a moment")
             return None
         job.status = RUNNING
         self.zk.create_job_with_tasks(job)
@@ -37,13 +40,16 @@ class JobManager(object):
 
     def assign_task(self, task: Task):
         task_path = self.zk.generate_path_by_id(task.job_id, task.job_batch_num, task.task_id)
+        print(f"task_nodes: {self.task_nodes} {current_thread().ident}")
         while True:
+            # 主动获取所有task manager的资源信息
+            self.update_task_node_resource()
             for task_node_id, info in self.task_nodes.items():
-                if info.get("state") == "offline":
+                if info.get("status") == "offline":
                     continue
-                elif info.get("update_time") < datetime.now() - timedelta(seconds=20):
+                elif info.get("update_time") < datetime.now() - timedelta(minutes=5):
                     # TODO: 节点掉线，需要task manager重新注册，该检测机制为被动触发，待改进
-                    self.task_nodes[task_node_id].update({"state": "offline"})
+                    self.task_nodes[task_node_id].update({"status": "offline"})
                     continue
 
                 if info.get("current_task_count") < info.get("max_task_count"):
@@ -54,10 +60,12 @@ class JobManager(object):
                     return True  # 保证一个任务只被分配给一个task manager
 
             # 没有资源就等待5秒重新尝试分配
+            print(f"waiting for task manager: {task}")
             time.sleep(5)
 
     def task_finish_callback(self, data, state):
-        self.logger.info(f"task_finish_callback: data:{data}, state:{state}")
+        # self.logger.info(f"task_finish_callback: data:{data}, state:{state}")
+        print(f"task_finish_callback: data:{data}, state:{state}")
         job = self.job_pool.fetch_job(job_id=data.get("job_id"), job_batch_num=data.get("job_batch_num"))
         task = job.get_task(data.get("task_id"))
         task.status = int(data.get("status"))
@@ -86,7 +94,14 @@ class JobManager(object):
             task_node_id = data.get("task_node_id")
             data["update_time"] = datetime.fromtimestamp(state.mtime / 1000)
             self.task_nodes[task_node_id].update(data)
-            self.logger.info(f"[node_resouce_listener_callback]: data:{data}, state:{state}")
+            # self.logger.info(f"[node_resouce_listener_callback]: data:{data}data, state:{state}")
+            print(f"[node_resouce_listener_callback]: data:{data}, thread: {current_thread().ident}")
+
+    def update_task_node_resource(self):
+        for task_node_id in self.zk.get_children(self.zk.node_register_base_path):
+            data, state = self.zk.fetch_data(f"{self.zk.node_register_base_path}/{task_node_id}", with_state=True)
+            data["update_time"] = datetime.fromtimestamp(state.mtime / 1000)
+            self.task_nodes[task_node_id].update(data)
 
     @classmethod
     def build_job_from_json(cls, job_id, job_batch_num, job_content):
@@ -139,11 +154,13 @@ class JobManager(object):
         if final_next_task == []:
             if task == job.end_task:
                 job.status = SUCCESS
-                self.logger.info("[job] this job has finished: {}".format(job))
+                # self.logger.info("[job] this job has finished: {}".format(job))
+                print("[job] this job has finished: {}".format(job))
             else:
                 if all([i.status != RUNNING for i in job._tasks.values()]):
                     job.status = FAILED
-                    self.logger.info("[job] this job finished with error: {}".format(job))
+                    # self.logger.info("[job] this job finished with error: {}".format(job))
+                    print("[job] this job finished with error: {}".format(job))
 
         for task in final_next_task:
             task.status = PREPARE
@@ -164,3 +181,6 @@ class JobManager(object):
             if job:
                 return job
             time.sleep(1)
+
+
+jobmanager = JobManager()

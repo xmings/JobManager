@@ -14,7 +14,7 @@ lock = Lock()
 
 class JobCenterPersist(object):
     def __init__(self):
-        self.conn = Redis(host='192.168.1.111', port=6379, db=0, password="create")
+        self.conn = Redis(host='192.168.1.111', port=6379, db=0)
 
     def fetch_task_by_id(self, job_id, job_batch_num, task_id):
         return pickle.loads(self.conn.hget(f"jobmanager.task", f"{job_id}-{job_batch_num}-{task_id}"))

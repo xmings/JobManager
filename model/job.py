@@ -73,7 +73,7 @@ class Job(object):
         return None if self.status == RUNNING else self.status
 
     def wait(self):
-        while self.poll() is not None:
+        while self.poll() is None:
             time.sleep(1)
 
     def __str__(self):

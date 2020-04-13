@@ -5,8 +5,6 @@
 # @Date  : 2019/7/15
 
 from .task_manager import task_manager_start
-from .job_manager import JobManager
+from .job_manager import jobmanager
 
-job_manager = JobManager()
-
-__all__ = ("job_manager", "task_manager_start")
+__all__ = ("jobmanager", "task_manager_start")
