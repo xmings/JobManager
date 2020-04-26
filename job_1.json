@@ -4,7 +4,7 @@
     "task_name": "start",
     "task_content": "echo start",
     "task_type": 0,
-    "exec_condition": 5,
+    "exec_condition": 0,
     "prev_task_ids": null
   },
   "1": {
@@ -12,7 +12,7 @@
     "task_name": "task1",
     "task_content": "echo 1",
     "task_type": 1,
-    "exec_condition": 5,
+    "exec_condition": 0,
     "prev_task_ids": [0]
   },
   "2": {
@@ -20,7 +20,7 @@
     "task_name": "task2",
     "task_content": "echo 2",
     "task_type": 1,
-    "exec_condition": 5,
+    "exec_condition": 0,
     "prev_task_ids": [0]
   },
   "3": {
@@ -28,7 +28,7 @@
     "task_name": "task3",
     "task_content": "ping -n 3 127.1>nul",
     "task_type": 1,
-    "exec_condition": 5,
+    "exec_condition": 0,
     "prev_task_ids": [1]
   },
   "4": {
@@ -36,7 +36,7 @@
     "task_name": "task4",
     "task_content": "ping -n 3 127.1>nul",
     "task_type": 1,
-    "exec_condition": 5,
+    "exec_condition": 0,
     "prev_task_ids": [1,2]
   },
    "5": {
@@ -44,31 +44,31 @@
     "task_name": "task5",
     "task_content": "ping -n 3 127.1>nul",
     "task_type": 1,
-    "exec_condition": 5,
+    "exec_condition": 0,
     "prev_task_ids": [1,2]
   },
   "6": {
     "task_id": 6,
-    "task_name": "task5",
+    "task_name": "task6",
     "task_content": "ping -n 3 127.1>nul",
     "task_type": 1,
-    "exec_condition": 5,
+    "exec_condition": 0,
     "prev_task_ids": [1,2]
   },
   "7": {
     "task_id": 7,
-    "task_name": "task5",
+    "task_name": "task7",
     "task_content": "ping -n 3 127.1>nul",
     "task_type": 1,
-    "exec_condition": 5,
+    "exec_condition": 0,
     "prev_task_ids": [1,2]
   },
   "8": {
     "task_id": 8,
-    "task_name": "task5",
+    "task_name": "task8",
     "task_content": "ping -n 3 127.1>nul",
     "task_type": 1,
-    "exec_condition": 5,
+    "exec_condition": 0,
     "prev_task_ids": [1,2]
   },
   "9": {
@@ -76,7 +76,7 @@
     "task_name": "finish",
     "task_content": null,
     "task_type": 2,
-    "exec_condition": 5,
+    "exec_condition": 0,
     "prev_task_ids": [3,4,5,6,7,8]
   }
 }

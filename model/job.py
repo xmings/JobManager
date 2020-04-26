@@ -6,7 +6,7 @@
 import time
 from datetime import datetime, date, timedelta
 from model.task import Task
-from common import WAITING, PREPARE, RUNNING, FAILED, SUCCESS
+from common import JobStatus, TaskStatus
 
 
 class Job(object):
@@ -17,7 +17,7 @@ class Job(object):
         self.start_task = None
         self.end_task = None
         self._tasks = {}
-        self._status = WAITING
+        self._status = JobStatus.CREATE
 
     def global_vars(self):
         return {
@@ -33,21 +33,15 @@ class Job(object):
     @property
     def current_running_tasks(self):
         for i in self.tasks:
-            if i.status == RUNNING:
+            if i.status == JobStatus.RUNNING:
                 yield i
-
-    @property
-    def current_prepare_tasks(self):
-        for i in self.tasks:
-            if i.status == PREPARE:
-                yield i
-
     @property
     def status(self):
         return int(self._status)
 
     @status.setter
     def status(self, status):
+        assert status in JobStatus
         self._status = status
 
     def prev_tasks(self, task_id):
@@ -70,7 +64,7 @@ class Job(object):
             self.end_task = task
 
     def poll(self):
-        return None if self.status == RUNNING else self.status
+        return None if self.status == JobStatus.RUNNING else self.status
 
     def wait(self):
         while self.poll() is None:

@@ -54,8 +54,6 @@ class ZKJobStateManager(object):
             "job_id": job.job_id,
             "job_batch_num": job.job_batch_num,
             "status": job.status,
-            "current_running_tasks": [i for i in job.current_running_tasks],
-            "current_prepare_tasks": [i for i in job.current_prepare_tasks]
         }
         self.create(self.generate_path_by_id(job.job_id, job.job_batch_num), data)
 
@@ -141,6 +139,8 @@ class ZKJobStateManager(object):
         state = self.zk.set(self.job_batch_num_path, b"")
         return state.version
 
+    def task_assign_path(self, task_node_id, task: Task):
+        return f"{self.node_register_base_path}/{task_node_id}/{task.job_id}_{task.job_batch_num}_{task.task_id}"
 
     def __getattr__(self, item):
         return getattr(self.zk, item)
