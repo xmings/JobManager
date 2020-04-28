@@ -9,7 +9,7 @@ import socket
 import subprocess
 from datetime import datetime
 from core.job_state_manager import zk
-from common import TaskStatus, TaskNodeStatus, sl4py
+from common import TaskStatus, TaskNodeStatus, TaskType, sl4py
 from threading import Thread, current_thread
 
 @sl4py
@@ -56,10 +56,11 @@ class TaskManager(object):
 
     def task_worker(self, job_id, job_batch_num, task_id):
         encoding = "gbk" if sys.platform == "win32" else "utf8"
-        status = TaskStatus.SUCCESS
         data = self.zk.fetch_task_data_by_id(job_id, job_batch_num, task_id)
         try:
-            if data.get("task_content"):
+            if data.get("task_content") \
+                    and data.get("task_type") == TaskType.TASK \
+                    and data.get("status") != TaskStatus.SKIP:
                 proc = subprocess.Popen(data.get("task_content"), shell=True, encoding=encoding,
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 while proc.poll() is None:
@@ -72,6 +73,8 @@ class TaskManager(object):
                         self.logger.error(f"[worker] This task <job_id:{job_id}>, "
                                           f"job_batch_num: {job_batch_num}, task_id: {task_id} finished with error: {err}")
                 status = TaskStatus.SUCCESS if proc.returncode == 0 else TaskStatus.FAILED
+            else:
+                status = TaskStatus.SUCCESS
         except Exception as e:
             status = TaskStatus.FAILED
             self.logger.error(f"[worker] This task <job_id:{job_id}>, "

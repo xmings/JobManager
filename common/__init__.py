@@ -3,9 +3,11 @@
 # @File  : __init__.py.py
 # @Author: wangms
 # @Date  : 2020/3/24
-from dataclasses import dataclass
 from .logutils import sl4py
 from enum import IntEnum
+from threading import Lock
+
+_status_consistency_lock = Lock()
 
 class JobStatus(IntEnum):
     CREATE = 0
@@ -24,11 +26,15 @@ class TaskStatus(IntEnum):
     RUNNING = 4
     PAUSE = 5
     SKIP = 6
-    MARK_FAILED = 7
     SUCCESS = 8
     FAILED = 9
 
 
+class TaskType(IntEnum):
+    START = 0
+    TASK = 1
+    JOB = 2
+    END = 5
 
 class TaskNodeStatus(IntEnum):
     ONLINE = 1

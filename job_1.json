@@ -75,7 +75,7 @@
     "task_id": 9,
     "task_name": "finish",
     "task_content": null,
-    "task_type": 2,
+    "task_type": 5,
     "exec_condition": 0,
     "prev_task_ids": [3,4,5,6,7,8]
   }

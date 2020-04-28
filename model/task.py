@@ -4,37 +4,34 @@
 # @Author: wangms
 # @Date  : 2019/7/15
 from uuid import uuid4
-from common import TaskStatus, DependenCondition
+from common import TaskStatus, DependenCondition, TaskType, _status_consistency_lock
 
 
 class Task(object):
     def __init__(self, job_id, job_batch_num, task_name, task_content,
-                 task_id=uuid4().hex, task_type=1, exec_condition=DependenCondition.ALL_SUCCESS):
+                 task_id=uuid4().hex, task_type=TaskType.TASK, exec_condition=DependenCondition.ALL_SUCCESS):
         self.job_id = job_id
         self.job_batch_num = job_batch_num
         self.task_id = task_id
         self.task_name = task_name
         self.task_content = task_content
         self.exec_condition = exec_condition
-        self.task_type = task_type
+        self.task_type = TaskType(task_type)
         self._status = TaskStatus.INIT
-        self._prev_task_ids = ()
-        self._next_task_ids = ()
-
+        self._prev_task_ids = set()
 
     @property
     def status(self):
-        return self._status
+        with _status_consistency_lock:
+            return self._status
 
     @status.setter
     def status(self, status):
-        assert status in TaskStatus
-        self._status = status
+        with _status_consistency_lock:
+            self._status = status
 
     def add_prev_id(self, task_id):
-        ids = list(self._prev_task_ids)
-        ids.append(task_id)
-        self._prev_task_ids = tuple(set(ids))
+        self._prev_task_ids.add(task_id)
 
     @property
     def prev_ids(self):
@@ -48,6 +45,9 @@ class Task(object):
 
     def __eq__(self, other):
         return True if self.task_id == other.task_id else False
+
+    def __hash__(self):
+        return int(f"{self.job_id}{self.job_batch_num}{self.task_id}")
 
     def __str__(self):
         return "<job_id: {}, job_batch_num: {}, task_id: {}, task_name: {}, task_content: {}" \

@@ -6,7 +6,7 @@
 import time
 from datetime import datetime, date, timedelta
 from model.task import Task
-from common import JobStatus, TaskStatus
+from common import JobStatus, TaskType, _status_consistency_lock
 
 
 class Job(object):
@@ -18,6 +18,7 @@ class Job(object):
         self.end_task = None
         self._tasks = {}
         self._status = JobStatus.CREATE
+        self.last_running_tasks = set()
 
     def global_vars(self):
         return {
@@ -37,12 +38,13 @@ class Job(object):
                 yield i
     @property
     def status(self):
-        return int(self._status)
+        with _status_consistency_lock:
+            return int(self._status)
 
     @status.setter
     def status(self, status):
-        assert status in JobStatus
-        self._status = status
+        with _status_consistency_lock:
+            self._status = status
 
     def prev_tasks(self, task_id):
         task = self._tasks.get(task_id)
@@ -58,9 +60,10 @@ class Job(object):
         assert task.task_id not in self._tasks.keys(), f"Same task id {task.task_id}"
         self._tasks[task.task_id] = task
 
-        if task.task_type == 0:
+        if task.task_type == TaskType.START:
             self.start_task = task
-        elif task.task_type == 2:
+            self.last_running_tasks.add(self.start_task)
+        elif task.task_type == TaskType.END:
             self.end_task = task
 
     def poll(self):

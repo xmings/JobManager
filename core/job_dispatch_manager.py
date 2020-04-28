@@ -11,9 +11,9 @@ from model.job import Job
 from model.task import Task
 from core.job_cache_pool import JobCachePool
 from common import TaskStatus, JobStatus, TaskNodeStatus, DependenCondition, sl4py
-from threading import current_thread
 
-assign_task_lock = Lock()
+_task_assign_lock = Lock()
+_next_task_lock = Lock()
 
 @sl4py
 class JobDispatchManager(object):
@@ -50,7 +50,7 @@ class JobDispatchManager(object):
                 time.sleep(10)
                 continue
 
-            with assign_task_lock:
+            with _task_assign_lock:
                 task.status = TaskStatus.ASSIGN_PREPARE
                 task_path = self.zk.generate_path_by_id(task.job_id, task.job_batch_num, task.task_id)
                 #self.logger.info(f"all_task_nodes: {self.task_nodes} {current_thread().ident}")
@@ -77,7 +77,7 @@ class JobDispatchManager(object):
         task = job.get_task(data.get("task_id"))
         task.status = TaskStatus(data.get("status"))
         if task.status in (TaskStatus.SUCCESS, TaskStatus.FAILED) \
-                and job.status in (JobStatus.RUNNING, JobStatus.MARK_FAILED):
+                and job.status == JobStatus.RUNNING:
 
             for child in self.next_executable_tasks(task):
                 child.status = TaskStatus.ASSIGN_PREPARE
@@ -127,48 +127,51 @@ class JobDispatchManager(object):
         return job
 
     def next_executable_tasks(self, task: Task):
-        job = self.job_cache_pool.fetch_job(job_id=task.job_id, job_batch_num=task.job_batch_num)
+        with _next_task_lock:
+            job = self.job_cache_pool.fetch_job(job_id=task.job_id, job_batch_num=task.job_batch_num)
 
-        final_next_task = []
-        # 如果作业已经结束就不会继续作下一个任务的计算
-        if job.status in (JobStatus.SUCCESS, JobStatus.FAILED):
-            return final_next_task
+            final_next_task = []
+            # 如果作业已经结束就不会继续作下一个任务的计算
+            if job.status in (JobStatus.SUCCESS, JobStatus.FAILED, JobStatus.TERMINATE):
+                return final_next_task
 
-        # 如果任务未结束也不会计算下一个任务
-        assert task.status in (TaskStatus.SUCCESS, TaskStatus.FAILED), "This task has not finished"
+            # 如果任务未结束也不会计算下一个任务
+            assert task.status in (TaskStatus.SUCCESS, TaskStatus.FAILED), "This task has not finished"
 
-        if task.task_id>=4:
-            print(task)
-        for child in job.next_tasks(task.task_id):
-            child_prev_tasks = [job.get_task(ptid) for ptid in child.prev_ids]
-            if child.exec_condition == DependenCondition.ALL_DONE and \
-                    all(map(lambda x: x.status in (TaskStatus.SUCCESS, TaskStatus.FAILED), child_prev_tasks)):
-                final_next_task.append(child)
-            elif child.exec_condition == DependenCondition.ALL_SUCCESS and \
-                    all(map(lambda x: x.status == TaskStatus.SUCCESS, child_prev_tasks)):
-                final_next_task.append(child)
-            elif child.exec_condition == DependenCondition.ALL_FAILED and \
-                    all(map(lambda x: x.status == TaskStatus.FAILED, child_prev_tasks)):
-                final_next_task.append(child)
-            elif child.exec_condition == DependenCondition.AT_LEAST_ONE_FAILED and \
-                    any(map(lambda x: x.status == TaskStatus.FAILED, child_prev_tasks)):
-                final_next_task.append(child)
-            elif child.exec_condition == DependenCondition.AT_LEAST_ONE_SUCCESS and \
-                    any(map(lambda x: x.status == TaskStatus.SUCCESS, child_prev_tasks)):
-                final_next_task.append(child)
+            for child in job.next_tasks(task.task_id):
+                child_prev_tasks = [job.get_task(ptid) for ptid in child.prev_ids]
+                if child.exec_condition == DependenCondition.ALL_DONE and \
+                        all(map(lambda x: x.status in (TaskStatus.SUCCESS, TaskStatus.FAILED), child_prev_tasks)):
+                    final_next_task.append(child)
+                elif child.exec_condition == DependenCondition.ALL_SUCCESS and \
+                        all(map(lambda x: x.status == TaskStatus.SUCCESS, child_prev_tasks)):
+                    final_next_task.append(child)
+                elif child.exec_condition == DependenCondition.ALL_FAILED and \
+                        all(map(lambda x: x.status == TaskStatus.FAILED, child_prev_tasks)):
+                    final_next_task.append(child)
+                elif child.exec_condition == DependenCondition.AT_LEAST_ONE_FAILED and \
+                        any(map(lambda x: x.status == TaskStatus.FAILED, child_prev_tasks)):
+                    final_next_task.append(child)
+                elif child.exec_condition == DependenCondition.AT_LEAST_ONE_SUCCESS and \
+                        any(map(lambda x: x.status == TaskStatus.SUCCESS, child_prev_tasks)):
+                    final_next_task.append(child)
 
-        # 如果该任务是end_task也没必要计算下一个任务，直接结束。
-        # 如果不是end_task并且final_next_task为空，说明依赖未满足，作业执行失败
-        if final_next_task == []:
-            if task == job.end_task:
-                job.status = JobStatus.SUCCESS
-                self.logger.info("[job] this job has finished: {}".format(job))
+            if not final_next_task:
+                if task == job.end_task:
+                    job.status = JobStatus.SUCCESS
+                    self.logger.info("[job] this job has finished: {}".format(job))
+                else:
+                    # 如果不是end_task，且final_next_task为空，且last_running_tasks都已经被执行，
+                    # 说明存在依赖未满足，作业不能继续下一步任务，所以执行失败
+                    if all([i.status in (TaskStatus.FAILED, TaskStatus.SUCCESS) for i in job.last_running_tasks]):
+                        job.status = JobStatus.FAILED
+                        self.logger.info("[job] this job finished with error: {}".format(job))
             else:
-                if all([i.status != TaskStatus.RUNNING for i in job.tasks]):
-                    job.status = JobStatus.FAILED
-                    self.logger.info("[job] this job finished with error: {}".format(job))
+                job.last_running_tasks.remove(task)
+                for t in final_next_task:
+                    job.last_running_tasks.add(t)
 
-        return final_next_task
+            return final_next_task
 
     def poll_job(self, job_id, job_batch_num):
         job = self.job_pool.fetch_job(job_id=job_id, job_batch_num=job_batch_num)

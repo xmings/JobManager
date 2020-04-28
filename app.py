@@ -8,7 +8,7 @@ import json
 from model.task import Task
 from model.job import Job
 from core import job_dispatch_manager, task_manager_start
-from common import JobStatus, TaskStatus
+from common import JobStatus, TaskStatus, TaskType, DependenCondition
 
 app = Flask(__name__)
 task_manager_start()
@@ -32,8 +32,8 @@ class CustomJSONEncoder(json.JSONEncoder):
                 "task_id": o.task_id,
                 "task_name": o.task_name,
                 "task_content": o.task_content,
-                "task_type": o.task_type,
-                "exec_condition": o.exec_condition,
+                "task_type": TaskType(o.task_type).name,
+                "exec_condition": DependenCondition(o.exec_condition).name,
                 "prev_task_ids": o.prev_ids,
                 "status": TaskStatus(o.status).name
             }
