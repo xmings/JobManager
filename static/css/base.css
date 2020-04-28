@@ -1,0 +1,46 @@
+body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.ui.small.message.header {
+    font-family: 'Ubuntu', 'Lucida Grande', 'Lucida Sans Unicode', 'Geneva', 'Verdana', sans-serif;
+    font-size: 21px;
+}
+
+.ui.small.message.content {
+    font-family: 'Ubuntu', 'Lucida Grande', 'Lucida Sans Unicode', 'Geneva', 'Verdana', sans-serif;
+    font-size: 18px;
+}
+
+#echarts-centent {
+    height: 100%;
+    border: none;
+    box-shadow: none;
+}
+
+#konva-centent {
+    width: 100%;
+    margin: 0 auto;
+}
+
+#toolbar {
+    position: fixed;
+    top: 5px;
+    left: 5px;
+    z-index: 1000;
+    display: none;
+    background: transparent;
+    opacity: 0.8;
+}
+
+#toolbar > .dropdown {
+    margin: 1rem 10px;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.source-mapping, .target-mapping {
+    margin-left: 10px;
+}

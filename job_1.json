@@ -5,7 +5,7 @@
     "task_content": "echo start",
     "task_type": 0,
     "exec_condition": 0,
-    "prev_task_ids": null
+    "prev_task_ids": []
   },
   "1": {
     "task_id": 1,

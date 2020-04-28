@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/job_flow.css') }}?param=42">
+{% endblock %}
+
+{% block jsbefore %}
+    <script src="{{ url_for('static', filename='js/konva.min.js') }}"></script>
+{% endblock %}
+
+{% block centerframe %}
+    <div id="container" data-job-id={{ job_id }} data-job-batch-num="{{ job_batch_num }}"></div>
+    <div class="ui vertical ctx-menu menu" id="common-menu" data-task-id>
+        <a class="item start-from-start">从起始节点开始</a>
+        <a class="item start-from-this">从当前节点开始</a>
+        <a class="item skip-this">跳过当前节点</a>
+        <a class="item pause-at-this">在当前节点暂停</a>
+    </div>
+    <div class="ui message notice" hidden></div>
+    <script type="module">
+        import {JobFlowPainter} from "{{ url_for('static', filename='modeler/job_flow_painter.js') }}";
+
+        $(document).ready(function () {
+            let container = $("#container"),
+                job_id = container.attr("data-job-id");
+            container.height($(document).height());
+            container.width($(document).width());
+            $.ajax({
+                url: "{{ url_for("steps_status") }}",
+                data: {job_id: job_id},
+                dataType: "json",
+                success: e => {
+                    new JobFlowPainter({
+                        container: "container",
+                        width: $(document).width(),
+                        height: $(document).height(),
+                        task_menu: "#common-menu"
+                    }).batch_create_from_json(e).show();
+                }
+            });
+
+            $(".start-from-start").click(function () {
+                $.ajax({
+                    url: "{{ url_for('job_start') }}",
+                    data: {
+                        job_id: job_id,
+                        action_type: "start_from_start"
+                    },
+                    dataType: "json",
+                    success: e => {
+                        console.log(e);
+                    },
+                    error: e=>{
+                        console.log(e)
+                    }
+                });
+
+                $("#common-menu").hide();
+            });
+
+        })
+
+    </script>
+
+{% endblock %}
+

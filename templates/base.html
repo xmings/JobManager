@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" style="height: 100%">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>JobFlow</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/semantic.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}?v=38">
+
+    {% block css %}
+    {% endblock %}
+    <script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/semantic.min.js') }}"></script>
+    {% block jsbefore %}
+    {% endblock %}
+
+</head>
+<body style="height: 100%; margin: 0">
+<div class="ui inverted dimmer" id="loader">
+    <div class="ui large text loader">加载中</div>
+</div>
+
+<div class="ui small basic message modal transition hidden" style="display: block !important;">
+    <div class="ui icon header">Title</div>
+    <div class="content">no message</div>
+    <div class="actions">
+        <div class="ui red basic cancel inverted button"><i class="remove icon"></i> No</div>
+        <div class="ui green ok inverted button"><i class="checkmark icon"></i> Yes</div>
+    </div>
+</div>
+
+<div class="ui fluid container" style="height: 100%!important; margin:0">
+    <div id="right-panel">
+        {% block centerframe %}
+        {% endblock %}
+    </div>
+    {% block rightsidebar %}
+    {% endblock %}
+</div>
+
+<script>
+    let loader, messageBox;
+    $("#right-panel").width(document.body.clientWidth - $(".sidebar").width());
+    window.onload = function () {
+        loader = $("#loader");
+        messageBox = $(".ui.modal.message");
+
+        $('.ui.radio.checkbox').checkbox();
+        $('.ui.dropdown').dropdown();
+
+        $.fn.setMessage = function (header, content) {
+            if ($(this).is($(messageBox))) {
+                $(this).find(".header").html(header);
+                $(this).find(".content").html(content);
+            }
+        };
+
+
+    };
+</script>
+
+
+{% block jsafter %}
+{% endblock %}
+</body>
+</html>

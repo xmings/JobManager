@@ -3,10 +3,11 @@
 # @File  : app.py
 # @Author: wangms
 # @Date  : 2019/7/15
-from flask import Flask, request, Response
+import os
 import json
 from model.task import Task
 from model.job import Job
+from flask import Flask, request, Response, render_template, jsonify
 from core import job_dispatch_manager, task_manager_start
 from common import JobStatus, TaskStatus, TaskType, DependenCondition
 
@@ -15,7 +16,7 @@ task_manager_start()
 
 
 @app.route("/job")
-def execute_job():
+def job_start():
     job_id = int(request.args.get("job_id"))
     with open(f"job_{job_id}.json", "r", encoding="utf8") as f:
         job_json = json.loads(f.read())
@@ -23,6 +24,23 @@ def execute_job():
     job.wait()
     return Response(json.dumps(job, cls=CustomJSONEncoder, ensure_ascii=False, indent=4),
                     mimetype="application/json")
+
+
+@app.route("/job/flow")
+def job_flow():
+    job_id = request.args.get("job_id")
+    return render_template("job_flow.html", job_id=job_id)
+
+
+@app.route("/steps/status")
+def steps_status():
+    job_id = request.args.get("job_id")
+    job_batch_num = request.args.get("job_batch_num")
+    #job = jobmanager.wait_job(job_id, job_batch_num)
+    path = os.path.join(os.path.dirname(__file__), f"job_{job_id}.json")
+    with open(path, "r", encoding="utf8") as f:
+        job_json = json.loads(f.read())
+    return jsonify(job_json)
 
 
 class CustomJSONEncoder(json.JSONEncoder):
