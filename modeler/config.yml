@@ -1,0 +1,13 @@
+database:
+  chr_dev:
+    connection:
+      host: 192.168.1.171
+      port: 5432
+      name: dev_chr_db
+      username: etl_usr
+      password: etl_usr$
+    scan_schema:
+    exclude_table:
+    include_table:
+
+

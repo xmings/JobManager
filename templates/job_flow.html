@@ -18,7 +18,7 @@
     </div>
     <div class="ui message notice" hidden></div>
     <script type="module">
-        import {JobFlowPainter} from "{{ url_for('static', filename='modeler/job_flow_painter.js') }}";
+        import {JobFlowPainter} from '{{ url_for('static', filename='modeler/job_flow_painter.js') }}';
 
         $(document).ready(function () {
             let container = $("#container"),

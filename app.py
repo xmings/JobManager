@@ -7,13 +7,16 @@ import os
 import json
 from model.task import Task
 from model.job import Job
-from flask import Flask, request, Response, render_template, jsonify
+from flask import Flask, request, Response, render_template, jsonify, send_from_directory
 from core import job_dispatch_manager, task_manager_start
 from common import JobStatus, TaskStatus, TaskType, DependenCondition
 
 app = Flask(__name__)
 task_manager_start()
 
+@app.route('/static/modeler/<path:path>', methods=["GET"])
+def send_js(path):
+    return send_from_directory('static/modeler', path, mimetype="application/javascript")
 
 @app.route("/job")
 def job_start():

@@ -1,0 +1,367 @@
+{% extends 'base.html' %}
+
+{% block css %}
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+        }
+
+        #contextmenu {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            display: none;
+        }
+
+        .inline-group {
+            display: flex;
+            align-items: center;
+        }
+
+    </style>
+{% endblock %}
+
+{% block jsbefore %}
+    <script src="{{ url_for('static', filename='js/konva.min.js') }}?v=4"></script>
+{% endblock %}
+
+{% block centerframe %}
+    <div class="ui" id="konva-centent"></div>
+    <div class="ui basic vertical menu" id="contextmenu">
+        <a class="item search-table global-level">搜索表</a>
+        <a class="item add-table global-level">新增表 </a>
+        <a class="item drop-table table-level">删除表 </a>
+        <a class="item update-relation table-level">更新关系 </a>
+        <a class="item save-position global-level">保存位置 </a>
+    </div>
+
+    <div class="ui larger modal table-addition">
+        <div class="header">新增表</div>
+        <div class="content">
+            <label for="new-tables-schema" hidden></label>
+            <select name="new-tables-schema" class="ui fluid dropdown" id="new-tables-schema">
+                <option value="">Schema</option>
+                {% for s in schemas %}
+                    <option class="item" value="{{ s.schema_name }}">{{ s.schema_name }}</option>
+                {% endfor %}
+            </select>
+            <div class="ui hidden divider"></div>
+            <label for="new-tables-name" hidden></label>
+            <select name="new-tables-name" multiple="" class="ui fluid dropdown" id="new-tables-name">
+                <option value="">Table</option>
+            </select>
+        </div>
+        <div class="actions">
+            <div class="ui positive right button" id="save-new-tables">保存</div>
+            <div class="ui button cancel">取消</div>
+        </div>
+    </div>
+
+    <div class="ui larger modal table-relation">
+        <div class="header">更新表关系</div>
+        <div class="content">
+            <div class="ui fitted segment">
+                <label for="target-table" hidden></label>
+                <select name="target-table" class="ui fluid dropdown" id="target-table">
+                    <option value="">选择目标表</option>
+                </select>
+                <div class="ui hidden divider"></div>
+                <div class="ui inline-group">
+                    <label for="source-columns" hidden></label>
+                    <select name="source-columns" multiple="" class="ui fluid dropdown" id="source-columns">
+                        <option value="">源表字段</option>
+                    </select>
+                    <label for="source-mapping" hidden></label>
+                    <select name="source-columns" class="ui compact dropdown source-mapping" id="source-mapping">
+                        <option value="1">1</option>
+                        <option value="n">n</option>
+                    </select>
+                </div>
+                <div class="ui hidden divider"></div>
+                <div class="inline-group">
+                    <label for="target-columns" hidden></label>
+                    <select name="target-columns" multiple="" class="ui fluid dropdown" id="target-columns">
+                        <option value="">选择目标表字段</option>
+                    </select>
+                    <label for="target-mapping" hidden></label>
+                    <select name="source-columns" class="ui compact dropdown target-mapping" id="target-mapping">
+                        <option value="1">1</option>
+                        <option value="n">n</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="actions">
+            <div class="ui positive button save-relation">保存</div>
+            <div class="ui button left cancel">取消</div>
+        </div>
+    </div>
+
+    <div class="ui larger modal table-search">
+        <div class="header">搜索表</div>
+        <div class="content">
+            <div class="ui fluid action input">
+                <select class="ui compact selection dropdown">
+                    <option value="schema">Schema</option>
+                    <option value="table">表名</option>
+                    <option value="column">列名</option>
+                    <option value="description">注释</option>
+                </select>
+                <input type="text" placeholder="关键字">
+                <button class="ui button">搜索</button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jsafter %}
+    <script type="module">
+        import {Designer} from "{{ url_for('static', filename='modeler/designer.js') }}?11";
+
+        let designer;
+        $(document).ready(function () {
+            $('.ui.dropdown').dropdown();
+
+            designer = new Designer({
+                container: "konva-centent",
+                contextmenu: "contextmenu"
+            });
+            $("#konva-centent").css("width", "100%");
+
+            $.ajax({
+                url: "{{ url_for('modeler.fetch_model') }}",
+                type: 'GET',
+                dataType: 'json',
+                success: function (data) {
+                    data.all_tables.forEach(function (v) {
+                        let table = designer.createTable(v.schema_name + "." + v.table_name, v.pos_x, v.pos_y);
+                        v.columns.forEach(function (c) {
+                            table.addRow(...c)
+                        });
+                    });
+
+                    data.relations.forEach(function (v) {
+                        designer.drawRelation(...v)
+                    });
+
+                    designer.flush();
+
+                },
+                error: function (XMLHttpRequest, textStatus, errorThrown) {
+                    messageBox.setMessage(errorThrown, XMLHttpRequest.responseText);
+                    messageBox.modal('show');
+                }
+            });
+
+            // 添加表
+            $(".add-table").click(function () {
+                $("#new-tables-schema").dropdown('clear');
+                $("#new-tables-name").dropdown('clear');
+                $(".table-addition").modal('show');
+            });
+
+            $("#new-tables-schema").change(() => {
+                $.ajax({
+                    url: "{{ url_for('modeler.fetch_tables') }}",
+                    type: 'POST',
+                    data: {
+                        schema: $("#new-tables-schema").dropdown("get value")
+                    },
+                    dataType: 'json',
+                    success: function (data) {
+                        buildOption($("#new-tables-name"), data.table);
+                    },
+                    error: function (XMLHttpRequest, textStatus, errorThrown) {
+                        messageBox.setMessage(errorThrown, XMLHttpRequest.responseText);
+                        messageBox.modal('show');
+                    }
+                })
+            });
+
+            $("#save-new-tables").click(function () {
+                let schema = $("#new-tables-schema").dropdown("get value");
+                let tables = $("#new-tables-name").dropdown("get value");
+
+                for (let t of tables) {
+                    if (!designer.fetchTableByName(schema + "." + t)) {
+                        $.ajax({
+                            url: "{{ url_for('modeler.add_model') }}",
+                            type: 'POST',
+                            data: {
+                                schema: schema,
+                                table: t
+                            },
+                            dataType: 'json',
+                            success: function (data) {
+                                let table = designer.createTable(schema + '.' + data.table);
+                                data.columns.forEach(function (c) {
+                                    table.addRow(...c)
+                                });
+                                designer.flush();
+                            },
+                            error: function (XMLHttpRequest, textStatus, errorThrown) {
+                                messageBox.setMessage(errorThrown, XMLHttpRequest.responseText);
+                                messageBox.modal('show');
+                            }
+                        })
+                    }
+                }
+
+            });
+
+            // 删除表
+            $(".drop-table").click(function () {
+                $.ajax({
+                    url: "{{ url_for('modeler.drop_model') }}",
+                    type: 'POST',
+                    data: {table_name: designer.selectedTableName},
+                    success: function () {
+                        designer.dropTableByTableName(designer.selectedTableName);
+                    },
+                    error: function (XMLHttpRequest, textStatus, errorThrown) {
+                        messageBox.setMessage(errorThrown, XMLHttpRequest.responseText);
+                        messageBox.modal('show');
+                    }
+                });
+            });
+
+            // 更新关系
+            let targetTableEle = $("#target-table"),
+                sourceColumnEle = $("#source-columns"),
+                targetColumnEle = $("#target-columns");
+
+            $(".update-relation").click(() => {
+                $('.table-relation').modal('show');
+
+                let targetTable = designer.tables.filter(x => {
+                    return x.tableName !== designer.selectedTableName;
+                }).map(x => x.tableName);
+                buildOption(targetTableEle, targetTable, "选择目标表");
+                sourceColumnEle.dropdown('clear');
+                targetColumnEle.dropdown('clear');
+            });
+
+            targetTableEle.change(() => {
+                sourceColumnEle.dropdown('clear');
+                targetColumnEle.dropdown('clear');
+
+                const p = new Promise((resolve, reject) => {
+                    resolve();
+                }).then(() => {
+                    let columnNames = designer.fetchTableByName(designer.selectedTableName).columnNames;
+                    buildOption(sourceColumnEle, columnNames);
+                    let targetColumn = designer.fetchTableByName(targetTableEle.val()).columnNames;
+                    buildOption(targetColumnEle, targetColumn);
+                }).then(() => {
+                    let cols = designer.fetchTableRelation(designer.selectedTableName, targetTableEle.val());
+                    sourceColumnEle.dropdown("set selected", cols.src);
+                    targetColumnEle.dropdown("set selected", cols.tgt);
+                });
+            });
+
+            $(".save-relation").click(() => {
+                let sourceColumns = sourceColumnEle.dropdown('get value'),
+                    targetTable = targetTableEle.dropdown('get value'),
+                    targetColumns = targetColumnEle.dropdown('get value');
+
+                if (targetTable.length === 0) {
+                    messageBox.setMessage('目标表未填写', '请完整填写目标表！');
+                    messageBox.modal('show');
+                    return;
+                }
+
+                let relation;
+                let sourceMapping = $("#source-mapping").dropdown('get value');
+                let targetMapping = $("#target-mapping").dropdown('get value');
+                if (sourceMapping === '1' && targetMapping === 'n') {
+                    relation = 2
+                } else if (sourceMapping === 'n' && targetMapping === '1') {
+                    relation = 3
+                } else if (sourceMapping === 'n' && targetMapping === 'n') {
+                    relation = 4
+                } else {
+                    relation = 1
+                }
+
+                $.ajax({
+                    url: "{{ url_for('modeler.save_relation') }}",
+                    type: 'POST',
+                    data: {
+                        source_table: designer.selectedTableName,
+                        source_columns: JSON.stringify(sourceColumns),
+                        target_table: targetTable,
+                        target_columns: JSON.stringify(targetColumns),
+                        relation: relation
+                    },
+                    success: function () {
+                        designer.drawRelation(
+                            designer.selectedTableName,
+                            sourceColumns,
+                            targetTable,
+                            targetColumns,
+                            relation
+                        );
+                    },
+                    error: function (XMLHttpRequest, textStatus, errorThrown) {
+                        messageBox.setMessage(errorThrown, XMLHttpRequest.responseText);
+                        messageBox.modal('show');
+                    }
+                });
+
+            });
+
+            // 保存坐标
+            $(".save-position").click(function () {
+                $.ajax({
+                    url: "{{ url_for('modeler.save_position') }}",
+                    type: 'POST',
+                    data: {
+                        table_info: JSON.stringify(designer.fetchAllTablesPos())
+                    },
+                    success: function () {
+
+                    },
+                    error: function (XMLHttpRequest, textStatus, errorThrown) {
+                        messageBox.setMessage(errorThrown, XMLHttpRequest.responseText);
+                        messageBox.modal('show');
+                    }
+                })
+            });
+
+            $(".search-table").click(function () {
+                $(".table-search").modal('show');
+            });
+
+            $(".table-search .button").click(function () {
+                designer.showTableByKeyword(
+                    $(".table-search input").val(),
+                    $(".table-search select").val()
+                );
+                $(".table-search").modal('hide');
+            });
+
+            function buildOption(obj, data, title) {
+                obj.empty();
+                if (typeof title !== "undefined") {
+                    obj.append($('<option/>', {
+                        value: "",
+                        text: title
+                    }))
+                }
+
+                $.each(data, function (i, item) {
+                    obj.append($('<option/>', {
+                        value: item,
+                        text: item
+                    }))
+                })
+            }
+
+        });
+
+    </script>
+{% endblock %}
